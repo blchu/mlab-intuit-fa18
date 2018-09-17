@@ -1,0 +1,31 @@
+	Simple and EFfective Multi-Paragraph Reading Comprehension
+
+	-Teaching machines to answer arbitrary user-generated questions. 
+	-Two types of approaches: 
+	--pipelined (select useful paragraph, and use a paragraph-model to extract answer
+	)
+	--confidence: apply paragraph model to multiple paragraphs and then pick the best
+
+
+	Piplined
+	-TF-IDF heuristic. Choose the paragraph with the smallest TF-IDF cosine distance with the question. Term frequency-inverse document frequency. 
+	-Document frequencies are computed using just the paragraphs, not the entire text.
+	--Advantage of this is, for instance, if the word "tiger" appears many times in the corpus and the question is "smallest tiger", then the word "smallest" is given as much weight.
+
+	-Note that annotating entire documents is difficult, so the training data is just the question and the answer, not the question, answer and the area from where the answer is extracted. Uses a negative log probability model across the different possible spans to pick the best 'paragraph'. 
+
+	This paper is basically just a reduction to the bidaf paper...
+
+
+	*Confidence
+	Four different techniques experimented
+	1. Shared-normalization. All paragraphs are processed independently. The objective function used shares the normalization factor between all paragraphs. This is similar to simply feeding the model multiple paragraphs from each context concatenated together, except each paragraph is processed independently until normalization. 
+	2. Merge: actually concatenate the paragraph together (with a paragraph separator token).
+	3. Allow for "No answer": Add some binary variables in your objective function. Use a hidden layer to determine z using the span-start scores and the span-end scores. 'z' is the weight given to the no-answer possibility.
+	4. Use a sigmoid loss function instead of negative log loss. 
+
+
+
+
+
+	

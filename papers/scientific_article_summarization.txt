@@ -1,0 +1,30 @@
+Scientific Article Summarization Using Citation-Context and Article's Discourse Structure
+
+-in the past, scientific articles have suffered from not using citation-context. 
+-overcome the problem by providing context for each citation.
+-also leverage the inherent scientific article's discourse for producing better summaries.
+
+scientific summarization is different
+- it is typically longer than regular articles
+- they are properly organized
+
+typically approaches involve
+- article abstracts. they are not necessary good enough because what the authors consider to be the most important is not necessarily the most important for the scientific community at large. (What the heck lol)
+- also not all discoveries are listed in the extracts. 
+
+this paper takes the paragraph from the citing article and looks are the reference paragraph in the cited article. 
+
+
+4 steps
+1. extracting the citation context
+- one problem with existing citation based summarization approaches is that they lack the context of the referenced paper.Given a citation c, return the ranked list of text spans r1...n which have the highest similarity to c. These are called referenec spans. Form the citation vector by using the cosine similarity between the normalized vectors.
+
+2. grouping citation-contexts
+now form groups of citation-contexts thar are about the same topic. Model this is a raph where nodes are sentences and edges are similarity between sentences (using cosine similarity between tf-idf vectors of the sentences). Want to find subgraphs of communities whose intra-connectivity is high but inter-connectivity is low. 
+The discourse model is to classify things as 'hypothesis' 'method' 'results, etc. 
+
+3. ranking the sentences within each group 
+An important node in the graph is one that has many connections with other nodes. Use eigenvectors and find the most central sentences using the power method. 
+
+4. selecting the sentences for final summary. 
+select top sentences iteratively from each group until you reach the summary length. Ordering: 'hypothesis' 'method' 'results' 'implication' 'discussion'

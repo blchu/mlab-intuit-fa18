@@ -1,0 +1,23 @@
+Congressman Jared Polis
+
+-LRB- D -RRB- Colorado : District 02
+
+Congressman Jason Chaffetz
+
+-LRB- R -RRB- Utah : District 03
+
+@highlight
+
+Video : Hand-held cams track freshmen moves
+
+@highlight
+
+Two freshman representatives document their experience for CNN
+
+@highlight
+
+Rep. Jared Polis is a Democrat representing Colorado 's Second district
+
+@highlight
+
+Rep. Jason Chaffetz is a Republican representing Utah 's Third district

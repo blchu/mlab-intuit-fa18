@@ -2,7 +2,7 @@ from CNNProcessor import model
 
 #input number of files you want to process 1000 is default
 print("Processing Text Files")
-model = model(500)
+model = model(1000)
 print("Getting Word Counts")
 wordCounts = model.getWordCounts()
 wc = wordCounts["the"]

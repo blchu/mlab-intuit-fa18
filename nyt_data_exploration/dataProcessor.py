@@ -47,7 +47,7 @@ def text(root):
 
 # Takes in a body of text returns an array of words
 # Punctation like periods and semicolons are separate words
-# Contractions are left as is
+# Contractions and hyphenated words are left as is
 def textToWords(l):
         pre = l.strip().replace('\n',' ').split(' ')
         proc = []
@@ -72,9 +72,9 @@ def textToWords(l):
                 continue
         return proc
 
-
+#Counts apostrophes and hyphens as punctuation as they naturally appear in complex words
 def isPunctuation(c):
-    return not ((c>='a' and c<='z') or (c>='A' and c<='Z') or (c=="'"))
+    return not ((c>='a' and c<='z') or (c>='A' and c<='Z') or (c=="'" or c=="-"))
 def countPunctuation(s):
     #print([isPunctuation(c) for c in s])
     return sum([isPunctuation(c) for c in s])
@@ -127,14 +127,14 @@ for month in os.listdir(filePath):
                         texts.append(abstract_tokens)
                         texts.append(fullText_tokens)
 
+#Since every even append is a
 abstractTexts = texts[::2]
 fullTextTexts = texts[1::2]
 
-
+#Train Word Vectors
 wordVectors = Word2Vec(texts).wv
 
-
-
+#Save Word Vectors
 pickle.dump(abstractTexts,open('Abstracts2007.pkl','wb'))
 pickle.dump(fullTextTexts,open('FullTexts2007.pkl','wb'))
 pickle.dump(wordVectors,open('trainedVectors2007.pkl','wb'))

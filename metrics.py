@@ -4,7 +4,7 @@ import pandas as ps
 from nltk.util import ngrams
 from sortedcontainers import SortedDict
 from nltk.corpus import stopwords
-
+from functools import reduce
 DEBUG = 0
 BLEU_WEIGHT_NGRAM = (0.25, 0.25, 0.25, 0.25)
 ROUGE_WEIGHT_NGRAM = (0.25, 0.25, 0.25, 0.25)
@@ -26,6 +26,12 @@ def freq_count(ngram_ls):
     for g in ngram_ls:
         fq_count[g] = fq_count[g] + 1 if g in fq_count.keys() else 1
     return fq_count
+
+"""
+Assume: sum of weights are 1
+"""
+def geo_weighted_mean(num, weight):
+    return reduce((lambda a,b: a*b), [x**y for x,y in zip(num,weight)])
 
 """
 model_sentence: one string
@@ -66,9 +72,9 @@ def sentence_score(model_sentence, target_corpus, weight_BLEU = BLEU_WEIGHT_NGRA
             print("%d gram BLEU: %.4f" % (i+1, scores[0])) 
             print("%d gram ROUGE: %.4f" % (i+1, scores[1]))
         ROUGE[i] = scores[1]
-        
-    weighted_BLEU = sum([x*y for x,y in zip(BLEU.values(),weight_BLEU)])
-    weighted_ROUGE = sum([x*y for x,y in zip(ROUGE.values(),weight_ROUGE)])
+     ## TODO: use average log or geometric mean   
+    weighted_BLEU = geo_weighted_mean(BLEU.values(), weight_BLEU)
+    weighted_ROUGE = geo_weighted_mean(ROUGE.values(), weight_ROUGE)
     return weighted_BLEU, weighted_ROUGE
 
 def sentence_score_f1(model_sentence, target_corpus):

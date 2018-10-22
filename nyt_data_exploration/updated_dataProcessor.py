@@ -5,7 +5,7 @@ import pickle
 import sys
 sys.path.insert(0,'../CommonTPFs')
 from commonFunctions import *
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import PunktSentenceTokenizer
 
 # Returns a set of all tags within a tree
 # Adds current tag to set then recursively searches for more tags
@@ -55,7 +55,19 @@ def isNumerical(s):
         int(s)
         return True
     except ValueError:
-        return False
+        return
+
+
+
+#get the parameters of the model
+with open('punkt_params.pkl', 'rb') as f:
+    params = pickle.load(f)
+
+tokenizer = PunktSentenceTokenizer(params)
+
+tokenizer._params.abbrev_types.add('dr. ')
+
+
 
 #Initialize list whose elements will be bodies of text
 texts = []
@@ -90,6 +102,7 @@ for month in os.listdir(dataFolder):
             # Gets the path for the abstract and articles
             abstract = findTag(root, 'abstract')
             fullText = findClass(root, 'full_text')
+            print(tokenizer.tokenize("Dr. Bernstien...you suck"))
 
             if (abstract and fullText):
 
@@ -99,10 +112,9 @@ for month in os.listdir(dataFolder):
 
                 if (abstract_string and True or fullText_string):
 
-
                     # Get a list of scentences
-                    abstract_sentence = sent_tokenize(abstract_string)
-                    fullText_sentence = sent_tokenize(fullText_string)
+                    abstract_sentence = tokenizer.tokenize(abstract_string)
+                    fullText_sentence = tokenizer.tokenize(fullText_string)
 
                     # Get a list of words
                     abstract_tokens = textToWords(abstract_string)

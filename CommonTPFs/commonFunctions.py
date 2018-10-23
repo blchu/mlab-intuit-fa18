@@ -11,16 +11,16 @@ def textToWords(l):
         #We don't want empty strings
         if(not word): continue
         #If there is no undesired punctuation leave as is
-        if(countPunctuation(word)==0): 
+        if(countPunctuation(word)==0):
             proc.append(word)
             continue
-        
+
         #This section of the code deals with punctuation
         #First we strip off and add separately add prefix punctuation
         while(word and isPunctuation(word[0])):
             proc.append(word[0])
             word = word[1:]
-        
+
         if(not word): continue
 
         if(countPunctuation(word)==0):

@@ -4,11 +4,14 @@ import math
 import gensim
 
 #Load Pickled Files
+
 abstractTexts = pickle.load(open('processedData/Abstracts2007.pkl','rb'))
 fullTextTexts = pickle.load(open('processedData/FullTexts2007.pkl','rb'))
 wordVectors = pickle.load(open('processedData/trainedVectors2007.pkl','rb'))
 abstractSentences = pickle.load(open('processedData/AbstractSentences2007.pkl','rb'))
 fullTextSentences = pickle.load(open('processedData/FullTextSentences2007.pkl','rb'))
+tokenizedAbstractSentences = pickle.load(open('processedData/TokenizedAbstractSentences2007.pkl','rb'))
+tokenizedFullTextSentences = pickle.load(open('processedData/TokenizedFullTextSentences2007.pkl','rb'))
 
 #returns the central percentCoverage of data
 def trimmedData(data,percentCoverage=0.99):

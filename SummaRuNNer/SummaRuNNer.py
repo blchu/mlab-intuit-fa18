@@ -7,11 +7,15 @@ WORD_VECTOR_DIM = 50
 #Number of values used in representing word along with surrounding context
 NUM_WORD_UNITS = 20
 
-#Number of sentences in document
-num_sentences = 20
-
+#Number of sentences to be analyzed.  If document has below NUM_SENTENCES sentences
+#Trivial sentences (one word 0 word vector embedding) will be used to pad up to NUM_SENTENCES
+#If document has more the NUM_SENTENCES sentences on the first NUM_SENTENCES only the first
+#NUM_SENTENCES sentences will be assigned probabilites for being in the summary.
+NUM_SENTENCES = pickle.load(open("processedData/cap.pkl",'rb'))
+print(f"NUM_SENTENCES: {NUM_SENTENCES}")
+print("Creating model...")
 #None will be number of words in respective sentence
-word_embeddings = [tf.placeholder(tf.float32,[None,WORD_VECTOR_DIM]) for _ in range(num_sentences)]
+word_embeddings = [tf.placeholder(tf.float32,[None,WORD_VECTOR_DIM]) for _ in range(NUM_SENTENCES)]
 
 #Create Forward and Backward Gated Reccurent Units for word-level bi-RNN
 word_GRU_forward = tf.nn.rnn_cell.GRUCell(NUM_WORD_UNITS)
@@ -20,7 +24,7 @@ word_GRU_backward = tf.nn.rnn_cell.GRUCell(NUM_WORD_UNITS)
 avg_word_embeddings = None
 
 #Determine average word embeddings for each sentence and populate avg_word_embeddings tensor
-for i in range(num_sentences):
+for i in range(NUM_SENTENCES):
 	#Add one in the beginning to formally dictate mini batch of size 1 (online learning)
 	this_sentence_word_embeddings = tf.reshape(word_embeddings[i],[1,-1,WORD_VECTOR_DIM])
 
@@ -71,7 +75,7 @@ outputs = tf.nn.bidirectional_dynamic_rnn(cell_fw=sentence_GRU_forward,
 #Unpack outputs
 forward_outputs,backward_outputs = outputs
 
-#Both num_sentences x NUM_SENTENCE_UNITS
+#Both NUM_SENTENCES x NUM_SENTENCE_UNITS
 #Removes formality one from beginning
 forward_outputs = tf.reshape(forward_outputs,[-1,NUM_SENTENCE_UNITS])
 backward_outputs = tf.reshape(backward_outputs,[-1,NUM_SENTENCE_UNITS])
@@ -110,10 +114,10 @@ Weight_l_nl_se = weight([NUM_SENTENCE_UNITS*2,NUM_SENTENCE_UNITS*2])
 #Bias Vector used in performing non linear transformation of linear sentence embeddings
 Bias_l_nl_se = bias([1,NUM_SENTENCE_UNITS*2])
 #Same bias accros various sentences
-Bias_l_nl_se = tf.tile(input=Bias_l_nl_se,multiples=[num_sentences,1])
+Bias_l_nl_se = tf.tile(input=Bias_l_nl_se,multiples=[NUM_SENTENCES,1])
 
 #tanh of weight x sent embedding + bias for each sentence
-#Compute nonlinear sentence embeddings.  Resulting size is [num_sentences,2*NUM_SENTENCE_UNITS]
+#Compute nonlinear sentence embeddings.  Resulting size is [NUM_SENTENCES,2*NUM_SENTENCE_UNITS]
 non_linear_ses = tf.tanh(tf.add(tf.matmul(sentence_embeddings,Weight_l_nl_se),Bias_l_nl_se))
 
 #Weights used in determining probability of sentence being in summary
@@ -141,7 +145,7 @@ indiv_s = None
 probabilities = []
 
 #Sequentially compute probability that sentence is in summary
-for i in range(num_sentences):
+for i in range(NUM_SENTENCES):
 
 	#nonlinear sentence embedding rotated to vector form of length NUM_SENTENCE_UNITS*2
 	h = tf.reshape(non_linear_ses[i],[NUM_SENTENCE_UNITS*2,1])
@@ -179,7 +183,7 @@ for i in range(num_sentences):
 		indiv_s = tf.concat([indiv_s,p*h],axis=1)
 
 #Place holder which will be [True,...,True,False,...,False] number of Trues = sentence word count
-sentences_present = tf.placeholder(tf.bool,[num_sentences])
+sentences_present = tf.placeholder(tf.bool,[NUM_SENTENCES])
 #Mask is used to remove individual summary contributions from filler sentences
 indiv_s = tf.boolean_mask(indiv_s,sentences_present,axis=1)
 #Summary Vector is updated to only include information from sentences that actually were in document
@@ -295,16 +299,16 @@ def get_feed_dict(abstract,full_text,summary_ohe):
 	#Initialize padded_text to the original text
 	padded_text = list(full_text)
 	#Mask is used to allow network to toss out filler sentences later
-	mask = [True]*min(len(full_text),num_sentences)
+	mask = [True]*min(len(full_text),NUM_SENTENCES)
 	#Filler sentence equivalent to sentence with one word whose word embedding is the zero vector
 	#This allows for consistent and predictable behaviour on rest of netowork.
 	fillerSentence = [[0]*WORD_VECTOR_DIM]
 	#Pad text if necessary and complete mask with False values where fillers are present
-	while(len(padded_text)<num_sentences):
+	while(len(padded_text)<NUM_SENTENCES):
 		padded_text.append(fillerSentence)
 		mask.append(False)
 	#Assign sentences from text to placeholders
-	#Note if the there are more sentences in the text than num_sentences those sentences will not be considered.
+	#Note if the there are more sentences in the text than NUM_SENTENCES those sentences will not be considered.
 	fd = {placeholder:sentence for placeholder,sentence in zip(word_embeddings,padded_text)}
 	#Provide values for other placeholders
 	fd.update({summary_word_embeddings:abstract,
@@ -345,20 +349,28 @@ for e in range(EPOCHS):
 	#Amount of texts to use
 	use = 3000
 	#How many steps to do before printing average loss
-	PRINT_EVERY = 1000
+	PRINT_EVERY = 50
 	#Count of texts used so far
 	count = 0
+	#variable used to keep track of overall Epoch Loss
+	epoch_loss = 0
+	#variable used to keep track of cumulative loss.  Reset every PRINT_EVERY iterations.
+	last_loss = 0
 	#Iterate through data untill count
 	for abstract,full_text,summary_ohe in zipped_data:
+		count+=1
 		print(f"Train {count}",end='\r')
-		train_step.run(feed_dict=get_feed_dict(abstract,full_text,summary_ohe),session=sess)
+		l,_ = sess.run([loss,train_step],feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
+		last_loss+=l
+		#Break once use number of texts have been used
 		if(count%PRINT_EVERY==0):
 			print("")
-			print(f"Loss: {averageLoss(use)}")
-		#Break once use number of texts have been used
-		count+=1
+			print("Losses:")
+			#Display average loss over last PRINT_EVERY iterations
+			print(f"Loss on last {PRINT_EVERY} documents: {last_loss/PRINT_EVERY}")
+			if(count>PRINT_EVERY): print(f"Loss on previous {count-PRINT_EVERY} documents: {epoch_loss/(count-PRINT_EVERY)}")
+			epoch_loss+=last_loss
+			last_loss = 0
 		if(count>=use): break
-	print("")
-	print(f"Loss: {averageLoss(use)}")
 
 

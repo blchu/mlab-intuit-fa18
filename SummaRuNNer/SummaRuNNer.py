@@ -2,6 +2,13 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
+#Specifiy training method
+#Adds additional sequential model to be used in training
+ABSTRACTIVE = True
+#Trains directly of probability dist using labels given
+EXTRACTIVE = not ABSTRACTIVE
+
+
 #Number of values used in encoding words
 WORD_VECTOR_DIM = 50
 #Number of values used in representing word along with surrounding context
@@ -195,182 +202,198 @@ s = tf.reshape(tf.reduce_mean(indiv_s,axis=1),[-1,1])
 #in the reverse RNN will be predictable and consistent and simply an indication of how short a text is.
 
 
-
 #Stack element tensors into one large tensor
 probabilities_tensor = tf.boolean_mask(tf.stack(probabilities),sentences_present)
 
-#Number of hidden units in summary RNN
-NUM_SUMMARY_UNITS = 25
+#Add additional components to graph and train abstractively
+if(ABSTRACTIVE):
 
-#Number of words in summary
-num_words_summary = tf.placeholder(tf.int32)
+	#Number of hidden units in summary RNN
+	NUM_SUMMARY_UNITS = 25
 
-#Used in generating hidden states for summary words
-abstractive_training_GRU = tf.nn.rnn_cell.GRUCell(NUM_SUMMARY_UNITS)
+	#Number of words in summary
+	num_words_summary = tf.placeholder(tf.int32)
 
-#initialize hidden state based on summary to internalize context
-Weight_rnn_sum = weight([NUM_SUMMARY_UNITS,NUM_SENTENCE_UNITS*2])
-#Transposing NUM_SUMMARY_UNITS x 1 resulting vector
-initial_rnn_state = tf.reshape(tf.matmul(Weight_rnn_sum,s),[1,NUM_SUMMARY_UNITS])
+	#Used in generating hidden states for summary words
+	abstractive_training_GRU = tf.nn.rnn_cell.GRUCell(NUM_SUMMARY_UNITS)
 
-#Word embeddings for each word
-summary_word_embeddings = tf.placeholder(tf.float32,[None,WORD_VECTOR_DIM])
+	#initialize hidden state based on summary to internalize context
+	Weight_rnn_sum = weight([NUM_SUMMARY_UNITS,NUM_SENTENCE_UNITS*2])
+	#Transposing NUM_SUMMARY_UNITS x 1 resulting vector
+	initial_rnn_state = tf.reshape(tf.matmul(Weight_rnn_sum,s),[1,NUM_SUMMARY_UNITS])
 
-#Hidden representations of each word from summary: num_words_summary x NUM_SUMMARY_UNITS
-hiddenStates,_ = tf.nn.dynamic_rnn(cell=abstractive_training_GRU,
-								inputs=tf.reshape(summary_word_embeddings,[1,-1,WORD_VECTOR_DIM]),
-								initial_state=initial_rnn_state,
-								dtype=tf.float32,
-								scope="summary_words_RNN")
+	#Word embeddings for each word
+	summary_word_embeddings = tf.placeholder(tf.float32,[None,WORD_VECTOR_DIM])
 
-hiddenStates = tf.reshape(hiddenStates,[-1,NUM_SUMMARY_UNITS])
+	#Hidden representations of each word from summary: num_words_summary x NUM_SUMMARY_UNITS
+	hiddenStates,_ = tf.nn.dynamic_rnn(cell=abstractive_training_GRU,
+									inputs=tf.reshape(summary_word_embeddings,[1,-1,WORD_VECTOR_DIM]),
+									initial_state=initial_rnn_state,
+									dtype=tf.float32,
+									scope="summary_words_RNN")
 
-#Dimensionality of fully connected layer
-NUM_FC_UNITS = 20
+	hiddenStates = tf.reshape(hiddenStates,[-1,NUM_SUMMARY_UNITS])
 
-#Weights and bias used in constructing fully connected layer which takes input from
-#hidden values, directly from word embedding, and summary vector
-Weight_fc_hidden = weight([NUM_SUMMARY_UNITS,NUM_FC_UNITS])
-Weight_fc_we = weight([WORD_VECTOR_DIM,NUM_FC_UNITS])
-Weight_fc_sum = weight([NUM_SENTENCE_UNITS*2,NUM_FC_UNITS])
+	#Dimensionality of fully connected layer
+	NUM_FC_UNITS = 20
 
-Bias_fc = bias([NUM_FC_UNITS,1])
+	#Weights and bias used in constructing fully connected layer which takes input from
+	#hidden values, directly from word embedding, and summary vector
+	Weight_fc_hidden = weight([NUM_SUMMARY_UNITS,NUM_FC_UNITS])
+	Weight_fc_we = weight([WORD_VECTOR_DIM,NUM_FC_UNITS])
+	Weight_fc_sum = weight([NUM_SENTENCE_UNITS*2,NUM_FC_UNITS])
 
-#Compute fully connected layer by finding contributions and applying tanh nonlinearity
+	Bias_fc = bias([NUM_FC_UNITS,1])
 
-hidden_component = tf.matmul(hiddenStates,Weight_fc_hidden)
-word_component = tf.matmul(summary_word_embeddings,Weight_fc_we)
+	#Compute fully connected layer by finding contributions and applying tanh nonlinearity
 
-#Since summary component is constant across timesteps we duplicate num_words_summary of s
-s = tf.reshape(s,[1,NUM_SENTENCE_UNITS*2])
-s = tf.tile(input=s,multiples=[num_words_summary,1])
+	hidden_component = tf.matmul(hiddenStates,Weight_fc_hidden)
+	word_component = tf.matmul(summary_word_embeddings,Weight_fc_we)
 
-sum_component = tf.matmul(s,Weight_fc_sum)
+	#Since summary component is constant across timesteps we duplicate num_words_summary of s
+	s = tf.reshape(s,[1,NUM_SENTENCE_UNITS*2])
+	s = tf.tile(input=s,multiples=[num_words_summary,1])
 
-#Overall dimensionality is num_words_summary x NUM_FC_UNITS
-FC = tf.tanh(hidden_component+word_component+sum_component)
+	sum_component = tf.matmul(s,Weight_fc_sum)
 
-#Load vocabulary length to use for dimensionality of probability distribution
-#Add one to account for "unknown" taking up an extra index
-NUM_VOCAB = pickle.load(open('processedData/vocabLength.pkl','rb'))+1
+	#Overall dimensionality is num_words_summary x NUM_FC_UNITS
+	FC = tf.tanh(hidden_component+word_component+sum_component)
 
-#Weight and bias used to predict prob distribution of word in summary
-Weight_softmax = weight([NUM_FC_UNITS,NUM_VOCAB])
+	#Load vocabulary length to use for dimensionality of probability distribution
+	#Add one to account for "unknown" taking up an extra index
+	NUM_VOCAB = pickle.load(open('processedData/vocabLength.pkl','rb'))+1
 
-Bias_softmax = bias([1,NUM_VOCAB])
-#Duplicate bias since bias is constant across time steps
-Bias_softmax = tf.tile(input=Bias_softmax,multiples=[num_words_summary,1])
+	#Weight and bias used to predict prob distribution of word in summary
+	Weight_softmax = weight([NUM_FC_UNITS,NUM_VOCAB])
 
-#Find softmax inputs from Fully Connected layer
-#Dimensionality is num_words_summary x NUM_VOCAB
-softmax_inputs = tf.matmul(FC,Weight_softmax)+Bias_softmax
-#Tensor of length num_summary_words representing indexes of each word.
-summary_word_indexes = tf.placeholder(tf.int32,[None])
-#Calculate loss using cross entropy loss at each time step and aggregating.
-losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=summary_word_indexes,
-													    logits=softmax_inputs)
-#Aggregate to arrive at numerical loss
-loss = tf.reduce_mean(losses)
+	Bias_softmax = bias([1,NUM_VOCAB])
+	#Duplicate bias since bias is constant across time steps
+	Bias_softmax = tf.tile(input=Bias_softmax,multiples=[num_words_summary,1])
 
-print("Loading data...")
-#Load tokenized data and summary one-hot encodings
-tokenized_abstract_sentences = pickle.load(open('processedData/TokenizedAbstractSentences2007.pkl','rb'))
-tokenized_full_text_sentences = pickle.load(open('processedData/TokenizedFullTextSentences2007.pkl','rb'))
-summary_one_hot_sentences = pickle.load(open('processedData/summaryEncodings.pkl','rb'))
+	#Find softmax inputs from Fully Connected layer
+	#Dimensionality is num_words_summary x NUM_VOCAB
+	softmax_inputs = tf.matmul(FC,Weight_softmax)+Bias_softmax
+	#Tensor of length num_summary_words representing indexes of each word.
+	summary_word_indexes = tf.placeholder(tf.int32,[None])
+	#Calculate loss using cross entropy loss at each time step and aggregating.
+	losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=summary_word_indexes,
+														    logits=softmax_inputs)
+	#Aggregate to arrive at numerical loss
+	loss = tf.reduce_mean(losses)
+	#Network done!
 
-#Aggregate between sentneces in single summaries
+	print("Loading data...")
+	#Load tokenized data and summary one-hot encodings
+	tokenized_abstract_sentences = pickle.load(open('processedData/TokenizedAbstractSentences2007.pkl','rb'))
+	tokenized_full_text_sentences = pickle.load(open('processedData/TokenizedFullTextSentences2007.pkl','rb'))
+	summary_one_hot_sentences = pickle.load(open('processedData/summaryEncodings.pkl','rb'))
 
-#Result is num abstracts x num words x word vector dim
-tokenized_abstracts = [sum([s for s in abstract],[]) 
-					   for abstract in tokenized_abstract_sentences]
-#Result is num abstracts x num words x num vocab
-summary_one_hot_encodings = [sum([s for s in abstract],[])
-					 for abstract in summary_one_hot_sentences]
-#Zip together various data for easy access
-zipped_data = list(zip(tokenized_abstracts,tokenized_full_text_sentences,summary_one_hot_encodings))
+	#Aggregate between sentneces in single summaries
 
-#Go through data and return feed_dict to run graph
-def get_feed_dict(abstract,full_text,summary_ohe):
-	#Remove 0 length sentences from full_text
-	i = 0
-	while(i<len(full_text)):
-		if(len(full_text[i])==0):full_text.pop(i)
-		i+=1
-	#Initialize padded_text to the original text
-	padded_text = list(full_text)
-	#Mask is used to allow network to toss out filler sentences later
-	mask = [True]*min(len(full_text),NUM_SENTENCES)
-	#Filler sentence equivalent to sentence with one word whose word embedding is the zero vector
-	#This allows for consistent and predictable behaviour on rest of netowork.
-	fillerSentence = [[0]*WORD_VECTOR_DIM]
-	#Pad text if necessary and complete mask with False values where fillers are present
-	while(len(padded_text)<NUM_SENTENCES):
-		padded_text.append(fillerSentence)
-		mask.append(False)
-	#Assign sentences from text to placeholders
-	#Note if the there are more sentences in the text than NUM_SENTENCES those sentences will not be considered.
-	fd = {placeholder:sentence for placeholder,sentence in zip(word_embeddings,padded_text)}
-	#Provide values for other placeholders
-	fd.update({summary_word_embeddings:abstract,
-			   summary_word_indexes:summary_ohe,
-			   num_words_summary:len(abstract),
-			   sentences_present:mask})
-	#Return feed dict
-	return fd
+	#Result is num abstracts x num words x word vector dim
+	tokenized_abstracts = [sum([s for s in abstract],[]) 
+						   for abstract in tokenized_abstract_sentences]
+	#Result is num abstracts x num words x num vocab
+	summary_one_hot_encodings = [sum([s for s in abstract],[])
+						 for abstract in summary_one_hot_sentences]
+	#Zip together various data for easy access
+	zipped_data = list(zip(tokenized_abstracts,tokenized_full_text_sentences,summary_one_hot_encodings))
 
-#Initialize TensorFlow variables and session
-sess = tf.Session()
+	#Go through data and return feed_dict to run graph
+	def get_feed_dict(abstract,full_text,summary_ohe):
+		#Remove 0 length sentences from full_text
+		i = 0
+		while(i<len(full_text)):
+			if(len(full_text[i])==0):full_text.pop(i)
+			i+=1
+		#Initialize padded_text to the original text
+		padded_text = list(full_text)
+		#Mask is used to allow network to toss out filler sentences later
+		mask = [True]*min(len(full_text),NUM_SENTENCES)
+		#Filler sentence equivalent to sentence with one word whose word embedding is the zero vector
+		#This allows for consistent and predictable behaviour on rest of netowork.
+		fillerSentence = [[0]*WORD_VECTOR_DIM]
+		#Pad text if necessary and complete mask with False values where fillers are present
+		while(len(padded_text)<NUM_SENTENCES):
+			padded_text.append(fillerSentence)
+			mask.append(False)
+		#Assign sentences from text to placeholders
+		#Note if the there are more sentences in the text than NUM_SENTENCES those sentences will not be considered.
+		fd = {placeholder:sentence for placeholder,sentence in zip(word_embeddings,padded_text)}
+		#Provide values for other placeholders
+		fd.update({summary_word_embeddings:abstract,
+				   summary_word_indexes:summary_ohe,
+				   num_words_summary:len(abstract),
+				   sentences_present:mask})
+		#Return feed dict
+		return fd
 
-#Return the average loss of the first num_texts texts
-def averageLoss(num_texts):
-	#Variable to keep track of loss
-	l = 0
-	#Count of texts used so far
-	i = 0
-	#Iterate through texts
-	for abstract,full_text,summary_ohe in zipped_data:
-		#Calculate loss for this text and add
-		l+=sess.run(loss,feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
-		#Break once use number of texts have been used
-		i+=1
-		if(i>=num_texts): break
-	return l/i
+	#Initialize TensorFlow variables and session
+	sess = tf.Session()
 
-#Create training algorithm using LEARNING_RATE and set EPOCHS
-LEARNING_RATE = 5e-3
-print("Creating training algorithm...")
-train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
-sess.run(tf.global_variables_initializer())
-EPOCHS = 1
+	#Return the average loss of the first num_texts texts
+	def averageLoss(num_texts):
+		#Variable to keep track of loss
+		l = 0
+		#Count of texts used so far
+		i = 0
+		#Iterate through texts
+		for abstract,full_text,summary_ohe in zipped_data:
+			#Calculate loss for this text and add
+			l+=sess.run(loss,feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
+			#Break once use number of texts have been used
+			i+=1
+			if(i>=num_texts): break
+		return l/i
 
-#Iterate EPCOCHS number of times
-for e in range(EPOCHS):
-	print(f"Epoch {e+1}")
-	#Amount of texts to use
-	use = 3000
-	#How many steps to do before printing average loss
-	PRINT_EVERY = 50
-	#Count of texts used so far
-	count = 0
-	#variable used to keep track of overall Epoch Loss
-	epoch_loss = 0
-	#variable used to keep track of cumulative loss.  Reset every PRINT_EVERY iterations.
-	last_loss = 0
-	#Iterate through data untill count
-	for abstract,full_text,summary_ohe in zipped_data:
-		count+=1
-		print(f"Train {count}",end='\r')
-		l,_ = sess.run([loss,train_step],feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
-		last_loss+=l
-		#Break once use number of texts have been used
-		if(count%PRINT_EVERY==0):
-			print("")
-			print("Losses:")
-			#Display average loss over last PRINT_EVERY iterations
-			print(f"Loss on last {PRINT_EVERY} documents: {last_loss/PRINT_EVERY}")
-			if(count>PRINT_EVERY): print(f"Loss on previous {count-PRINT_EVERY} documents: {epoch_loss/(count-PRINT_EVERY)}")
-			epoch_loss+=last_loss
-			last_loss = 0
-		if(count>=use): break
+	#Create training algorithm using LEARNING_RATE and set EPOCHS
+	LEARNING_RATE = 5e-3
+	print("Creating training algorithm...")
+	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
+	sess.run(tf.global_variables_initializer())
+	EPOCHS = 1
+
+	#Iterate EPCOCHS number of times
+	for e in range(EPOCHS):
+		print(f"Epoch {e+1}")
+		#Amount of texts to use
+		use = 3000
+		#How many steps to do before printing average loss
+		PRINT_EVERY = 50
+		#Count of texts used so far
+		count = 0
+		#variable used to keep track of overall Epoch Loss
+		epoch_loss = 0
+		#variable used to keep track of cumulative loss.  Reset every PRINT_EVERY iterations.
+		last_loss = 0
+		#Iterate through data untill count
+		for abstract,full_text,summary_ohe in zipped_data:
+			count+=1
+			print(f"Train {count}",end='\r')
+			l,_ = sess.run([loss,train_step],feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
+			last_loss+=l
+			#Break once use number of texts have been used
+			if(count%PRINT_EVERY==0):
+				print("")
+				print("Losses:")
+				#Display average loss over last PRINT_EVERY iterations
+				print(f"Loss on last {PRINT_EVERY} documents: {last_loss/PRINT_EVERY}")
+				if(count>PRINT_EVERY): print(f"Loss on previous {count-PRINT_EVERY} documents: {epoch_loss/(count-PRINT_EVERY)}")
+				epoch_loss+=last_loss
+				last_loss = 0
+			if(count>=use): break
+
+#Implement extractive training method using probabilities_tensor and labels
+if(EXTRACTIVE):
+	#None represents number of sentences present
+	#Should directly feed label (no padding of label)
+	#label is a boolean list where 1 indicates sentence was part of 
+	#extractive summary label and 0 indicates where it was not.
+	extractive_label = tf.placeholder(tf.float32,[None])
+	#Compute the logarithmic loss
+	loss = tf.losses.log_loss(labels=extractive_label,predictions=probabilities_tensor)
+	#Network done!
+
+	#Will add actual training later
 
 

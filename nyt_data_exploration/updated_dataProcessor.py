@@ -57,6 +57,30 @@ def isNumerical(s):
     except ValueError:
         return
 
+#Load bounds and assign them appropriately
+bounds = pickle.load(open("processedData/bounds.pkl",'rb'))
+min_ft_sentence_count,max_ft_sentence_count = bounds[0]
+min_a_word_count,max_a_word_count = bounds[1]
+min_ft_avg_sentence_length,max_ft_avg_sentence_length = bounds[2]
+min_ratio,max_ratio = bounds[3]
+#Return if passed in texts satisfies bounds
+def fitsBounds(full_text_sentences,abstract_tokens,ratio):
+    #Return if v is between minimum and maximum
+    inBounds = lambda v,minimum,maximum: (v>=minimum and v<=maximum) 
+    #Ratio test
+    if(not inBounds(ratio,min_ratio,max_ratio)): return False
+    #Full text sentence count test
+    num_ft_sentences = len(full_text_sentences)
+    if(not inBounds(num_ft_sentences,min_ft_sentence_count,max_ft_sentence_count)): return False
+    #Abstract sentence count test
+    num_a_words = len(abstract_tokens)
+    if(not inBounds(num_a_words,min_a_word_count,max_a_word_count)): return False
+    #Average sentence length test
+    avg = lambda l:sum(l)/len(l)
+    avg_sentence_length = avg([len(s) for s in fullTextSentences])
+    if(not inBounds(avg_sentence_length,min_ft_avg_sentence_length,max_ft_avg_sentence_length)): return False
+    #If no tests failed return True
+    return True
 
 
 #get the parameters of the model
@@ -124,13 +148,14 @@ for month in os.listdir(dataFolder):
                     # Get the ratio of the size of abstracts vs. articles
                     ratio = len(abstract_tokens) / len(fullText_tokens)
 
-                    #Criteria to keep the data point
-                    if((ratio <= 0.5) and (len(abstract_tokens) >= 5)):
+                    #Checks if text meets criteria to keep the data point
+                    if(fitsBounds(fullText_sentence,abstract_tokens,ratio)):
 
                         fullTextSentences.append([textToWords(sentence) for sentence in fullText_sentence])
                         abstractSentences.append([textToWords(sentence) for sentence in abstract_sentence])
                         texts.append(abstract_tokens)
                         texts.append(fullText_tokens)
+    #Break to only process one month.
     break
 
 #Since every even append is an abstract and every odd append is a fullText we may extract both from texts

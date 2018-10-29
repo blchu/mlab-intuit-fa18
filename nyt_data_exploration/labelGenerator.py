@@ -1,5 +1,5 @@
 import pickle
-'''
+
 word_vectors = pickle.load(open('processedData/trainedVectors2007.pkl','rb'))
 #Dictionary that will ultimately map words to indexes
 word_to_index = {}
@@ -15,7 +15,7 @@ summary_encodings = [[[word_to_index.get(w,0) for w in sentence]
                        for abstract in abstract_sentences]
 pickle.dump(summary_encodings,open('processedData/summaryEncodings.pkl','wb'))
 pickle.dump(len(word_vectors.vocab),open('processedData/vocabLength.pkl','wb'))
-'''
+
 full_texts = pickle.load(open('processedData/tokenizedFullTextSentences2007.pkl','rb'))
 #Create an list of all sentence counts
 sentence_counts = [len(txt) for txt in full_texts]

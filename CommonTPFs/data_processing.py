@@ -47,7 +47,7 @@ if __name__ == "__main__":
         document = [' '.join(sent) for sent in sentences[i]]
         summary = ' '.join(abstracts[i][0])
         try:
-            labels.append(get_binary_labels(document, summary))
+            labels.append([i, get_binary_labels(document, summary)])
         except ValueError:
             continue
         kept_docs.append(sentences[i])
@@ -55,8 +55,5 @@ if __name__ == "__main__":
 
     with open(os.path.join(sys.argv[3], 'labels.pkl'), 'wb') as f:
         pickle.dump(labels, f)
-
-    with open(os.path.join(sys.argv[3], 'data.pkl'), 'wb') as f:
-        pickle.dump(kept_docs, f)
 
     print("Completed")

@@ -75,3 +75,30 @@ def sentencesFromTexts(texts):
                 if(inSentence): sentence.append(w)
         textSentences.append(sentences)
     return textSentences
+
+#Return a function that returns (precision,recall) considering
+#the overlap of n-grams present in the two texts.
+def rougeNScorer(n):
+    #Calculate precision recall
+    #t1 is reference text and t2 is text you are comparing to reference.
+    def precisionRecall(reference,inference):
+        #Initialize and populate set with all distinct n-grams of t1
+        ref_grams = set()
+        for i in range(len(reference)-(n-1)):
+            ref_grams.add(tuple(reference[i:i+n]))
+        #Initialize and populate set with all distinct n-grams of t2
+        inf_grams = set()
+        for i in range(len(inference)-(n-1)):
+            inf_grams.add(tuple(inference[i:i+n]))
+        #If either set is empty return None
+        if(not (ref_grams and inf_grams)): return None
+        #Find the overlap between the two sets
+        overlap = len(ref_grams.intersection(inf_grams))
+        #Calculate and return precision and recall
+        precision = overlap/len(inf_grams)
+        recall = overlap/len(ref_grams)
+        return (precision,recall)
+    #return function created
+    return precisionRecall
+
+

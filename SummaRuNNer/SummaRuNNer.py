@@ -1,6 +1,9 @@
 import numpy as np
 import tensorflow as tf
 import pickle
+import sys
+sys.path.insert(0,'../CommonTPFs')
+from commonFunctions import *
 
 #Specifiy training method
 #Adds additional sequential model to be used in training
@@ -217,18 +220,25 @@ if(ABSTRACTIVE):
 	#Used in generating hidden states for summary words
 	abstractive_training_GRU = tf.nn.rnn_cell.GRUCell(NUM_SUMMARY_UNITS)
 
-	#initialize hidden state based on summary to internalize context
-	Weight_rnn_sum = weight([NUM_SUMMARY_UNITS,NUM_SENTENCE_UNITS*2])
+	#Add the same linear transformation of the summary to each word embedding
+	#This is equivalent to using the summary multiplied by the same weight when
+	#calculating inputs for the sequential model as outlined in the paper.
+	Weight_rnn_sum = weight([WORD_VECTOR_DIM,NUM_SENTENCE_UNITS*2])
 	#Transposing NUM_SUMMARY_UNITS x 1 resulting vector
-	initial_rnn_state = tf.reshape(tf.matmul(Weight_rnn_sum,s),[1,NUM_SUMMARY_UNITS])
+	summary_comp = tf.reshape(tf.matmul(Weight_rnn_sum,s),[1,WORD_VECTOR_DIM])
+	#Left with num_words_summary*WORD_VECTOR dim matrix where each row is equivalent
+	tiled_summary_comp = tf.tile(input=summary_comp,multiples=[num_words_summary,1])
 
 	#Word embeddings for each word
 	summary_word_embeddings = tf.placeholder(tf.float32,[None,WORD_VECTOR_DIM])
 
+	#Add word_embeddings with summary components to create inputs for model
+	#Linear transformations of the two components are now allowed.
+	sequential_inputs = tf.add(summary_word_embeddings,tiled_summary_comp)
+
 	#Hidden representations of each word from summary: num_words_summary x NUM_SUMMARY_UNITS
 	hiddenStates,_ = tf.nn.dynamic_rnn(cell=abstractive_training_GRU,
-									inputs=tf.reshape(summary_word_embeddings,[1,-1,WORD_VECTOR_DIM]),
-									initial_state=initial_rnn_state,
+									inputs=tf.reshape(sequential_inputs,[1,-1,WORD_VECTOR_DIM]),
 									dtype=tf.float32,
 									scope="summary_words_RNN")
 
@@ -286,18 +296,26 @@ if(ABSTRACTIVE):
 	#Load tokenized data and summary one-hot encodings
 	tokenized_abstract_sentences = pickle.load(open('processedData/TokenizedAbstractSentences2007.pkl','rb'))
 	tokenized_full_text_sentences = pickle.load(open('processedData/TokenizedFullTextSentences2007.pkl','rb'))
+	untokenized_abstract_sentences = pickle.load(open('processedData/AbstractSentences2007.pkl','rb'))
+	untokenized_full_text_sentences = pickle.load(open('processedData/FullTextSentences2007.pkl','rb'))
 	summary_one_hot_sentences = pickle.load(open('processedData/summaryEncodings.pkl','rb'))
 
 	#Aggregate between sentneces in single summaries
 
 	#Result is num abstracts x num words x word vector dim
 	tokenized_abstracts = [sum([s for s in abstract],[]) 
-						   for abstract in tokenized_abstract_sentences]
+						   	for abstract in tokenized_abstract_sentences]
 	#Result is num abstracts x num words x num vocab
 	summary_one_hot_encodings = [sum([s for s in abstract],[])
-						 for abstract in summary_one_hot_sentences]
+						 	for abstract in summary_one_hot_sentences]
+	untokenized_abstracts = [sum([s for s in abstract],[])
+							for abstract in untokenized_abstract_sentences]
 	#Zip together various data for easy access
-	zipped_data = list(zip(tokenized_abstracts,tokenized_full_text_sentences,summary_one_hot_encodings))
+	zipped_data = list(zip(tokenized_abstracts,
+						tokenized_full_text_sentences,
+						summary_one_hot_encodings,
+						untokenized_abstracts,
+						untokenized_full_text_sentences))
 
 	#Go through data and return feed_dict to run graph
 	def get_feed_dict(abstract,full_text,summary_ohe):
@@ -346,6 +364,17 @@ if(ABSTRACTIVE):
 			if(i>=num_texts): break
 		return l/i
 
+	#Takes in probabilities for each sentence and corresponding text
+	#Returns a string containing each sentence for which the corresponding
+	#probability is greater than 0.5
+	def generateSummary(probabilities,text):
+		summary = []
+		#iterate through probabilities
+		for i in range(len(probabilities)):
+			#if probability>0.5 append sentence to summary
+			if(probabilities[i]>0.5): summary+=text[i]
+		return summary
+
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
 	LEARNING_RATE = 5e-3
 	print("Creating training algorithm...")
@@ -362,25 +391,57 @@ if(ABSTRACTIVE):
 		PRINT_EVERY = 50
 		#Count of texts used so far
 		count = 0
-		#variable used to keep track of overall Epoch Loss
+		#variables used to keep track of overall Epoch loss,precision, and recall
 		epoch_loss = 0
-		#variable used to keep track of cumulative loss.  Reset every PRINT_EVERY iterations.
+		epoch_precision = 0
+		epoch_recall = 0
+		#variables used to keep track of cumulative loss,
+		#precision, and recall.  Reset every PRINT_EVERY iterations.
 		last_loss = 0
+		last_precision = 0
+		last_recall = 0
+		#Function that returns precision recall in the context of ROUGE N=2
+		precision_recall_R = rougeNScorer(2)
 		#Iterate through data untill count
-		for abstract,full_text,summary_ohe in zipped_data:
+		for abstract,full_text,summary_ohe,u_abstract,u_full_text in zipped_data:
 			count+=1
 			print(f"Train {count}",end='\r')
-			l,_ = sess.run([loss,train_step],feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
+			#Train using texts and additionally return loss and probabilities.
+			p,l,_ = sess.run([probabilities_tensor,loss,train_step],feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
+			#Increment loss
 			last_loss+=l
-			#Break once use number of texts have been used
+			#Generate summary
+			summary = generateSummary(p,u_full_text)
+			#summary will be none if prediction entailed 0 length summary
+			if(summary):
+				precision,recall = precision_recall_R(u_abstract,summary)
+				#Increment precision and recall
+				last_precision+=precision
+				last_recall+=recall
+			#Display information every PRINT_EVERY
 			if(count%PRINT_EVERY==0):
 				print("")
-				print("Losses:")
-				#Display average loss over last PRINT_EVERY iterations
-				print(f"Loss on last {PRINT_EVERY} documents: {last_loss/PRINT_EVERY}")
-				if(count>PRINT_EVERY): print(f"Loss on previous {count-PRINT_EVERY} documents: {epoch_loss/(count-PRINT_EVERY)}")
+				print("_____________")
+				print(f"On last {PRINT_EVERY} documents:")
+				#Display average loss,preicison and recall over last PRINT_EVERY iterations
+				print(f"Loss: {last_loss/PRINT_EVERY}")
+				print(f"Precision: {last_precision/PRINT_EVERY}")
+				print(f"Recall: {last_recall/PRINT_EVERY}")
+				#If not first time print last time
+				if(count>PRINT_EVERY):
+					print(f"On previous {count-PRINT_EVERY} documents:")
+					print(f"Loss: {epoch_loss/(count-PRINT_EVERY)}")
+					print(f"Precision: {epoch_precision/(count-PRINT_EVERY)}")
+					print(f"Recall: {epoch_recall/(count-PRINT_EVERY)}")
+				#Increment epoch loss,precision,and recall
 				epoch_loss+=last_loss
+				epoch_precision+=last_precision
+				epoch_recall+=last_recall
+				#Reset last loss,precision, and recall
 				last_loss = 0
+				last_recall = 0
+				last_precision = 0
+			#Break once use number of texts have been used
 			if(count>=use): break
 
 #Implement extractive training method using probabilities_tensor and labels

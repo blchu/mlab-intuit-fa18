@@ -118,7 +118,22 @@ abstractSentences = sentencesFromTexts(abstractTexts)
 fullTextSentences = sentencesFromTexts(fullTextTexts)
 
 #Train Word Vectors
-wordVectors = Word2Vec(texts).wv
+wordVectorSize = 50
+wordVectors = Word2Vec(sentences=texts,size=wordVectorSize).wv
+defaultWordVector = [0]*wordVectorSize
+
+def getWordVector(w):
+    if(w in wordVectors): return wordVectors[w]
+    return defaultWordVector
+
+#Generate Tokenized sentences, replace words with word vectors
+tokenizedAbstractSentences = [[[getWordVector(w) for w in sentence]
+                                for sentence in abstract] 
+                                for abstract in abstractSentences]
+
+tokenizedFullTextentences = [[[getWordVector(w) for w in sentence]
+                                for sentence in fullText] 
+                                for fullText in fullTextSentences]
 
 #Create Directory to store processedData if it doesn't already exist
 if not os.path.exists('processedData'):
@@ -130,3 +145,5 @@ pickle.dump(fullTextTexts,open('processedData/FullTexts2007.pkl','wb'))
 pickle.dump(wordVectors,open('processedData/trainedVectors2007.pkl','wb'))
 pickle.dump(abstractSentences,open('processedData/AbstractSentences2007.pkl','wb'))
 pickle.dump(fullTextSentences,open('processedData/FullTextSentences2007.pkl','wb'))
+pickle.dump(tokenizedAbstractSentences,open('processedData/AbstractSentences2007.pkl','wb'))
+pickle.dump(tokenizedFullTextSentences,open('processedData/FullTextSentences2007.pkl','wb'))

@@ -395,13 +395,23 @@ if(ABSTRACTIVE):
 		epoch_loss = 0
 		epoch_precision = 0
 		epoch_recall = 0
+		epoch_rouge = 0
 		#variables used to keep track of cumulative loss,
 		#precision, and recall.  Reset every PRINT_EVERY iterations.
 		last_loss = 0
 		last_precision = 0
 		last_recall = 0
-		#Function that returns precision recall in the context of ROUGE N=2
-		precision_recall_R = rougeNScorer(2)
+		last_rouge = 0
+		#Function that returns precision recall in the context of ROUGE N=1
+		N_rouge = 1
+		precision_recall_R = rougeNScorer(1)
+		#function used to display metrics
+		def disp(loss,prec,rec,rou,num):
+			percent = lambda  v: round(v*100/num,2)
+			print(f"Loss: {loss/num}")
+			print(f"Precision: {percent(prec)} %")
+			print(f"Recall: {percent(rec)} %")
+			print(f"ROUGE {N_rouge}: {percent(rou)}%")
 		#Iterate through data untill count
 		for abstract,full_text,summary_ohe,u_abstract,u_full_text in zipped_data:
 			count+=1
@@ -414,33 +424,32 @@ if(ABSTRACTIVE):
 			summary = generateSummary(p,u_full_text)
 			#summary will be none if prediction entailed 0 length summary
 			if(summary):
-				precision,recall = precision_recall_R(u_abstract,summary)
+				precision,recall,rouge = precision_recall_R(u_abstract,summary)
 				#Increment precision and recall
 				last_precision+=precision
 				last_recall+=recall
+				last_rouge+=rouge
 			#Display information every PRINT_EVERY
 			if(count%PRINT_EVERY==0):
 				print("")
 				print("_____________")
 				print(f"On last {PRINT_EVERY} documents:")
 				#Display average loss,preicison and recall over last PRINT_EVERY iterations
-				print(f"Loss: {last_loss/PRINT_EVERY}")
-				print(f"Precision: {last_precision/PRINT_EVERY}")
-				print(f"Recall: {last_recall/PRINT_EVERY}")
+				disp(last_loss,last_precision,last_recall,last_rouge,PRINT_EVERY)
 				#If not first time print last time
 				if(count>PRINT_EVERY):
 					print(f"On previous {count-PRINT_EVERY} documents:")
-					print(f"Loss: {epoch_loss/(count-PRINT_EVERY)}")
-					print(f"Precision: {epoch_precision/(count-PRINT_EVERY)}")
-					print(f"Recall: {epoch_recall/(count-PRINT_EVERY)}")
+					disp(epoch_loss,epoch_precision,epoch_recall,epoch_rouge,count-PRINT_EVERY)
 				#Increment epoch loss,precision,and recall
 				epoch_loss+=last_loss
 				epoch_precision+=last_precision
 				epoch_recall+=last_recall
+				epoch_rouge+=last_rouge
 				#Reset last loss,precision, and recall
 				last_loss = 0
 				last_recall = 0
 				last_precision = 0
+				last_rouge = 0
 			#Break once use number of texts have been used
 			if(count>=use): break
 

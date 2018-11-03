@@ -100,7 +100,9 @@ def rougeNScorer(n):
         #Calculate and return precision and recall
         precision = overlap/len(inf_grams)
         recall = overlap/len(ref_grams)
-        F1 = 2*(precision*recall)/(precision+recall)
+        F1 = 0
+        if((precision+recall)>0):
+            F1 = 2*(precision*recall)/(precision+recall)
         return (precision,recall,F1)
     #return function created
     return precisionRecall

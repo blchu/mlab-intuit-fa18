@@ -10,7 +10,7 @@ import re
 from termcolor import colored
 from copy import deepcopy
 
-## Pre-consolidation of preprocessing stuff:
+## TODO: modify after preprocessing stuff is done
 CNN = '/Users/apple/Desktop/钻/Projects/mlab-intuit-fa18/CNNDatasetAnalysis/'
 cur = '/Users/apple/Desktop/钻/Projects/mlab-intuit-fa18/'
 testSentences = pickle.load(open(cur + 'FullTextSentences2007.pkl', 'rb'))
@@ -23,7 +23,7 @@ fullTextSentences = pickle.load(open(CNN+'processedData/textSentences.pkl','rb')
 ## hard coding for some examples of exception 
 period_ls = {'Mr.': 'Mr', 'Mrs.': 'Mrs', 'Dr.': 'Dr', 'Gov.':'Gov'}
 
-def isPunctuation(word):
+def is_punctuation(word):
     ## corner case: U.S.A
     if word == '.': 
         return True
@@ -31,12 +31,12 @@ def isPunctuation(word):
         return False if re.match("^[a-zA-Z0-9_\-\.]*$", word) else True
     
 # merge documents from a list of list of words to one document str
-def mergeDoc(lsls):
+def merge_doc(lsls):
     doc_str = ""
     for sen in lsls:
         for word in sen:  
             ## prevent leading spaces
-            if isPunctuation(word) or doc_str == "": 
+            if is_punctuation(word) or doc_str == "": 
                 doc_str += word
             ## remove new line
             elif word != '\n':   
@@ -54,7 +54,7 @@ def preprocess(doc_str):
         doc = doc.replace(k, v)
     return doc
 
-fullText = [preprocess(mergeDoc(x)) for x in fullTextSentences]
+fullText = [preprocess(merge_doc(x)) for x in fullTextSentences]
 
 ## 2. Functions to help locate coreference clusters and their mentions:
 #Since spacy gives the arbitrary position of each mention (sometimes that does not align with the word positions we have depending on how they break their sentences/words/punctuations), building a dictionary that stores both sentence start and ending positions to help search flexibly in a range.
@@ -63,7 +63,7 @@ fullText = [preprocess(mergeDoc(x)) for x in fullTextSentences]
 
 ## input: list of list of words
 ## return: a dictionary (key: sentence positions; value: [start word pos, end word pos])
-def labelPositions(lsls):
+def label_positions(lsls):
     sen_pos = 0
     word_pos = 0
     label_dic = {}
@@ -77,7 +77,7 @@ def labelPositions(lsls):
 
 ## Input: word position
 ## Return: the sentence position in which the word is located
-def findSen(dic, word_pos):
+def find_sentence(dic, word_pos):
     for k,v in dic.items():
         if(word_pos >= v[0] and word_pos <= v[1]):
             return k
@@ -86,7 +86,7 @@ def findSen(dic, word_pos):
 
 ## Find the sublist of ls that is an exact match to the pattern
 ## return the first set of index of sublist
-def subfinderFirst(ls, pattern):
+def subfinder_first(ls, pattern):
     match_index = []
     for wi in (range(len(ls))):
         for pi in (range(len(pattern))):
@@ -124,13 +124,13 @@ def resolution(mod, dic, doc, lsls):
         return
     for cluster in mod._.coref_clusters:
         identity = str(cluster.main)
-        identity_sen = findSen(dic, cluster.main.start)  ## TODO: or use mention[0]
+        identity_sen = find_sentence(dic, cluster.main.start)  ## TODO: or use mention[0]
         if identity_sen is None:
             continue
         replaced_sen = []
         for ref in cluster.mentions:
             if str(ref).lower() != str(cluster.main).lower(): ## e.g. Cluster like ["He", "he"] is ignored
-                sen_index = findSen(dic,ref.start)
+                sen_index = find_sentence(dic,ref.start)
                 if sen_index is None:
                     continue
                 
@@ -168,7 +168,7 @@ def selectReplace(sentences, identity, ref, dic): ## FOR DEBUGGING
     
     ##2. Locate reference to be replaced within a fuzzy range:
     ref_ls = ref.split(" ")
-    replace_index = subfinderFirst(sentences[0], ref_ls)
+    replace_index = subfinder_first(sentences[0], ref_ls)
     sentence = sentences[0]
     sentence_id = 0
         
@@ -177,7 +177,7 @@ def selectReplace(sentences, identity, ref, dic): ## FOR DEBUGGING
             sentence_id = i
             break
         if replace_index is None:
-            replace_index = subfinderFirst(sentences[i], ref_ls)
+            replace_index = subfinder_first(sentences[i], ref_ls)
             sentence = sentences[i]
 
     ## DEBUGGING
@@ -186,7 +186,7 @@ def selectReplace(sentences, identity, ref, dic): ## FOR DEBUGGING
     
     if PRINT:
         print("###\nBefore: ") 
-        markSen(sentence, replace_index)
+        mark_sentence(sentence, replace_index)
 
     ## Deal with messy corner cases:
     # 1. "they're" --> "[identity] are"
@@ -216,15 +216,15 @@ def selectReplace(sentences, identity, ref, dic): ## FOR DEBUGGING
     
     if PRINT:
         print("After: ")   
-        markSen(sentence, replace_pos)
+        mark_sentence(sentence, replace_pos)
     
     return sentence, sentence_id
 
-def markSen(sen, highlight_index):
+def mark_sentence(sen, highlight_index):
     for word, index in zip(sen,range(len(sen))):
         if(index in highlight_index):
             print(" ", colored(word, 'red'), end = "")
-        elif(isPunctuation(word)):
+        elif(is_punctuation(word)):
             print(word, end= "")
         else:  
             print(" ", word, end= "")
@@ -232,29 +232,35 @@ def markSen(sen, highlight_index):
     return
 
 
-## For comparing before and after resolution (set PRINT = 1)
+## For comparing before and after resolution 
+# (set PRINT = 1)
 # src: CNN or NYT in lslsls form
-def resolveSingleDoc(doc_index, src):
-    lsls = deepcopy(src[doc_index])
-    dic  = labelPositions(lsls) 
-    full = preprocess(mergeDoc(lsls))
+def resolve_single_doc(doc_index, dict):
+    lsls = deepcopy(dict[doc_index])
+    sentence_pos  = label_positions(lsls) 
+    full = preprocess(merge_doc(lsls))
     mod = nlp(full) ## using fullText here
-    resolution(mod, dic, full, lsls)
+    resolution(mod, sentence_pos, full, lsls)
     return
     
 ## Apply to all documents
-def resolveAll(lslsls):
-    ret = deepcopy(lslsls)
-    for lsls in ret:
-        dic  = labelPositions(lsls) 
-        full = preprocess(mergeDoc(lsls))
+# input: a dictionary of all documents:
+# key: document_id
+# value: list of list of strings
+def resolve_all(dict):
+    resolved_dict = {}
+    for doc_id, doc in dict.items():
+        doc_copy = deepcopy(doc)
+        sentence_pos  = label_positions(doc_copy) 
+        full = preprocess(merge_doc(doc_copy))
         mod = nlp(full)
-        resolution(mod, dic, full, lsls) ## TODO: Does this mutate in place
-    return ret
+        resolution(mod, sentence_pos, full, doc_copy)
+        resolved_dict[doc_id] = doc_copy
+    return resolved_dict
 
 ## Testing
 nlp = en_coref_md.load()
 DEBUG = 0
 PRINT = 0
-CNN = resolveAll(fullTextSentences)
-# takes ~30min
+CNN = resolve_all(fullTextSentences)
+# takes ~30min for 1000 documents

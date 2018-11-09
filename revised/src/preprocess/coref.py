@@ -262,5 +262,5 @@ def resolve_all(dict):
 nlp = en_coref_md.load()
 DEBUG = 0
 PRINT = 0
-CNN = resolve_all(fullTextSentences)
+#CNN = resolve_all(fullTextSentences[:2])
 # takes ~30min for 1000 documents

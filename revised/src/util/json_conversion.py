@@ -16,7 +16,6 @@ def load_json_to_dict(filename):
 
 ## Serialize the dictionary and write to a json file with the given filename ("__.json")
 def write_dict_to_json(dict, filename):
-    dict = {} 
     with open(filename, 'w') as outfile:
         json.dump(dict, outfile)
     return

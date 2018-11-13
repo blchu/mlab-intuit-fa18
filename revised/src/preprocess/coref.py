@@ -211,36 +211,21 @@ def mark_sentence(sen, highlight_index):
     return
 
 
-## For comparing before and after resolution 
-# (set PRINT = 1)
-# src: CNN or NYT in lslsls form
-def resolve_single_doc(doc_index, dict):
-    lsls = deepcopy(dict[doc_index])
-    sentence_pos  = label_positions(lsls) 
-    full = merge_doc(lsls)
-    mod = nlp(full) ## using fullText here
-    resolution(mod, sentence_pos, full, lsls)
-    return
-    
-## Apply to all documents
-# input: a dictionary of all documents:
-# key: document_id
-# value: list of list of strings
-def resolve_all(dict):
-    resolved_dict = {}
-    for doc_id, doc in dict.items():
-        doc_copy = deepcopy(doc)
-        sentence_pos  = label_positions(doc_copy) 
-        full = merge_doc(doc_copy)
-        mod = nlp(full)
-        resolution(mod, sentence_pos, full, doc_copy)
-        resolved_dict[doc_id] = doc_copy
-    return resolved_dict
+# lsls: a list of list of words representation
+# raw_text: a single string representation of the document
+# return: a single string after resolution
+def resolve(lsls, raw_text):
+    lsls2 = deepcopy(lsls)
+    sentence_pos  = label_positions(lsls2) 
+    mod = nlp(raw_text) 
+    resolution(mod, sentence_pos, raw_text, lsls2)
+    resolved = merge_doc(lsls2)
+    return resolved
 
 ## MACRO
 nlp = en_coref_md.load()
 DEBUG = 0
-PRINT = 0
+PRINT = 0 ## will print before and after resolution text for checking
 
 ## For testing
 # CNN = resolve_all(fullTextSentences[:2])

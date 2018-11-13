@@ -4,13 +4,18 @@ import pickle
 import sys
 sys.path.insert(0,'../CommonTPFs')
 from commonFunctions import *
+import matplotlib.pyplot as plt
 
 #Specifiy training method
 #Adds additional sequential model to be used in training
-ABSTRACTIVE = True
+ABSTRACTIVE = False
 #Trains directly of probability dist using labels given
 EXTRACTIVE = not ABSTRACTIVE
-
+#variable specificies whether to start from scratch
+#or initialize using prior trained weights
+USE_LAST = True
+#0->Train, 1->Use
+MODE = 1
 
 #Number of values used in encoding words
 WORD_VECTOR_DIM = 50
@@ -208,6 +213,17 @@ s = tf.reshape(tf.reduce_mean(indiv_s,axis=1),[-1,1])
 #Stack element tensors into one large 1D tensor of length = number of sentences present
 probabilities_tensor = tf.reshape(tf.boolean_mask(tf.stack(probabilities),sentences_present),[-1])
 
+#Takes in probabilities for each sentence and corresponding text
+#Returns a string containing each sentence for which the corresponding
+#probability is greater than 0.5
+def generateSummary(probabilities,text,threshold=0.5):
+	summary = []
+	#iterate through probabilities
+	for i in range(len(probabilities)):
+		#if probability>threshold append sentence to summary
+		if(probabilities[i]>threshold): summary+=text[i]
+	return summary
+
 #General train procedure
 #data paramater represents a list.  Each element is a dict.
 #Each dict has keys that map to attributes of the data depending
@@ -216,7 +232,7 @@ probabilities_tensor = tf.reshape(tf.boolean_mask(tf.stack(probabilities),senten
 #feed-dict depending on the method
 def train(data,gfd):
 
-	#Initialize TensorFlow variables and session
+	#Initialize the session
 	sess = tf.Session()
 
 	#Return the average loss of the first num_texts texts
@@ -234,22 +250,21 @@ def train(data,gfd):
 			if(i>=num_texts): break
 		return l/i
 
-	#Takes in probabilities for each sentence and corresponding text
-	#Returns a string containing each sentence for which the corresponding
-	#probability is greater than 0.5
-	def generateSummary(probabilities,text):
-		summary = []
-		#iterate through probabilities
-		for i in range(len(probabilities)):
-			#if probability>0.5 append sentence to summary
-			if(probabilities[i]>0.5): summary+=text[i]
-		return summary
-
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
-	LEARNING_RATE = 5e-3
+	LEARNING_RATE = 4e-3
 	print("Creating training algorithm...")
 	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
-	sess.run(tf.global_variables_initializer())
+	#Create saver/loader
+	saver = tf.train.Saver()
+	if(USE_LAST):
+		print("Loading trained variables")
+		if(ABSTRACTIVE):
+			saver.restore(sess,"saved_models/SR_ABS.ckpt")
+		else:
+			saver.restore(sess,"saved_models/SR_EXT.ckpt")
+	else:
+		print("Initializing variables")
+		sess.run(tf.global_variables_initializer())
 	EPOCHS = 1
 
 	#Function that returns precision recall in the context of ROUGE N=1
@@ -270,6 +285,8 @@ def train(data,gfd):
 		use = 3000
 		#How many steps to do before printing average loss
 		PRINT_EVERY = 50
+		#How many steps to do before saving model
+		SAVE_EVERY = PRINT_EVERY*4
 		#Count of texts used so far
 		count = 0
 		#variables used to keep track of overall Epoch loss,precision, and recall
@@ -311,10 +328,23 @@ def train(data,gfd):
 				print(f"On last {PRINT_EVERY} documents:")
 				#Display average loss,preicison and recall over last PRINT_EVERY iterations
 				disp(last_loss,last_precision,last_recall,last_rouge,PRINT_EVERY)
+				'''
+				#Display example summarization:
+				print("Actual")
+				print(' '.join(d['u_abstract']))
+				print("Predicted")
+				print(' '.join(summary))
+				'''
 				#If not first time print last time
 				if(count>PRINT_EVERY):
 					print(f"On previous {count-PRINT_EVERY} documents:")
 					disp(epoch_loss,epoch_precision,epoch_recall,epoch_rouge,count-PRINT_EVERY)
+				if(count%SAVE_EVERY==0):
+					print("Saving Network...")
+					if(ABSTRACTIVE):
+						saver.save(sess, "saved_models/SR_ABS.ckpt")
+					else:
+						saver.save(sess, "saved_models/SR_EXT.ckpt")
 				#Increment epoch loss,precision,and recall
 				epoch_loss+=last_loss
 				epoch_precision+=last_precision
@@ -329,7 +359,7 @@ def train(data,gfd):
 			if(count>=use): break
 
 #Add additional components to graph and train abstractively
-if(ABSTRACTIVE):
+if(ABSTRACTIVE and MODE==0):
 
 	#Number of hidden units in summary RNN
 	NUM_SUMMARY_UNITS = 25
@@ -540,7 +570,98 @@ if(EXTRACTIVE):
 		#Return feed dict
 		return fd
 
-	#Using data and feed_dict method run general train and display procedure
-	train(zipped_data,get_feed_dict)
+	if(MODE==0):
+		#Using data and feed_dict method run general train and display procedure
+		train(zipped_data,get_feed_dict)
+	elif(MODE==1):
+		#Initialize the session
+		sess = tf.Session()
+		saver = tf.train.Saver()
 
+		print("Loading trained variables")
+		saver.restore(sess,"saved_models/SR_EXT.ckpt")
 
+		#Takes in predicitons and label
+		#Returns (true postitive rate, false positive rate)
+		def ROC_Analysis(p,t):
+			true_positive_count = 0
+			false_positive_count = 0
+			#Actual positives simply number of 1s in label
+			actual_positives = sum(t)
+			#Actual positives simply number of 0s in label
+			actual_negatives = len(t)-actual_positives
+			#Iterate over sentences
+			for pred,act in zip(p,t):
+				#If we predict a sentence is in summary
+				if(pred):
+					#If label predicts it is or not
+					if(act):
+						true_positive_count+=1
+					else:
+						false_positive_count+=1
+			#Defaults to 1 if no labels were 1
+			true_positive_rate = 1
+			if(actual_positives): true_positive_rate = true_positive_count/actual_positives
+			#Defaults to 0 if no labels were 0
+			false_positive_rate = 0
+			if(actual_negatives): false_positive_rate = false_positive_count/actual_negatives
+			return (true_positive_rate,false_positive_rate)
+
+		num_thresholds = 101
+		thresholds = [i/100 for i in range(num_thresholds)]
+		#First sub list Rouge metrics, then ROC
+		#Rouge metrics are precision,recall,rouge score
+		#ROC metrics are true positive rate, false positive rate
+		metrics = [[[0,0,0],[0,0]] for _ in range(num_thresholds)]
+		count = 0
+		#Function that returns precision recall in the context of ROUGE N=1
+		N_rouge = 1
+		precision_recall_R = rougeNScorer(1)
+
+		print("Performing Metric Analysis")
+		for d in zipped_data:
+			count+=1
+			print(f"Analyzing {count}",end='\r')
+			p = sess.run(probabilities_tensor,feed_dict=get_feed_dict(d))
+
+			for i,thresh in enumerate(thresholds):
+				summary = generateSummary(p,d['u_full_text'],thresh)
+				#summary will be none if prediction entailed 0 length summary
+				if(summary):
+					#get rouge metrics
+					precision,recall,rouge = precision_recall_R(d['u_abstract'],summary)
+					#Increment rouge metrics
+					metrics[i][0][0]+=precision
+					metrics[i][0][1]+=recall
+					metrics[i][0][2]+=rouge
+					#Get threshold predicitions 0 if less than thresh 1 if greater
+					predictions = [int(prob>thresh) for prob in p]
+					#get ROC metrics
+					tpr,fpr = ROC_Analysis(predictions,d['text_labels'])
+					#Increment ROC metrics
+					metrics[i][1][0]+=tpr
+					metrics[i][1][1]+=fpr
+		print("")
+		print("Calculating metric averages")
+		#Get the average for each metric
+		for m in metrics:
+			m[0][0]/=count
+			m[0][1]/=count
+			m[0][2]/=count
+			m[1][0]/=count
+			m[1][1]/=count
+		print("Creating ROC Curve")
+		ROC_Curve_x = [m[1][1] for m in metrics]
+		ROC_Curve_y = [m[1][0] for m in metrics]
+		#Area under the curve approximation
+		area = 0
+		for i in range(num_thresholds-1):
+			avg_height = (ROC_Curve_y[i]+ROC_Curve_y[i+1])/2
+			interval_length = (ROC_Curve_x[i]-ROC_Curve_x[i+1])
+			area+=avg_height*interval_length
+		print(f"Area under ROC Curve {area}")
+		plt.scatter(ROC_Curve_x,ROC_Curve_y)
+		plt.xlim(0,1)
+		plt.ylim(0,1)
+		print("Showing ROC Curve")
+		plt.show()

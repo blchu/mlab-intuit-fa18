@@ -11,11 +11,11 @@ import json
 ## value: document represented as a list of list of strings
 def load_json_to_dict(filename):
     with open(filename, 'r') as infile:
-        dict = json.load(infile)
-    return dict
+        dictionary = json.load(infile)
+    return dictionary
 
 ## Serialize the dictionary and write to a json file with the given filename ("__.json")
-def write_dict_to_json(dict, filename):
+def write_dict_to_json(dictionary, filename):
     with open(filename, 'w') as outfile:
-        json.dump(dict, outfile)
+        json.dump(dictionary, outfile)
     return

@@ -8,6 +8,8 @@ def rouge_sum(rouge_scores):
     return sum([rouge_scores[metric]['f'] for metric in rouge_metrics])
 
 
+# Get binary extractive labels for each sentence in a document based off of
+# an abstractive summary
 def get_binary_labels(abstract, document):
     broadcasted_summaries = [abstract for _ in range(len(document))]
     scores = rouge.get_scores(document, broadcasted_summaries)

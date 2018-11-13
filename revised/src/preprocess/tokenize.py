@@ -16,5 +16,9 @@ def tokenize_document(text):
                            if str(token) not in string.whitespace])
         except StopIteration:
             break
-    return tokens, [sent.string.strip() for sent in sents]
+    return tokens
 
+# Returns the text, tokenized by sentence
+def sentence_tokenize(text):
+    nlp_text = nlp(text.strip())
+    return [sent.string.strip() for sent in nlp_text.sents]

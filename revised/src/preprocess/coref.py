@@ -4,18 +4,10 @@
 Coreference Resolution
 """
 
-import pickle
 import en_coref_md
 import re
 from termcolor import colored
 from copy import deepcopy
-
-## TODO: modify after preprocessing stuff is done
-CNN = '/Users/apple/Desktop/钻/Projects/mlab-intuit-fa18/CNNDatasetAnalysis/'
-cur = '/Users/apple/Desktop/钻/Projects/mlab-intuit-fa18/'
-testSentences = pickle.load(open(cur + 'FullTextSentences2007.pkl', 'rb'))
-fullTextTexts = pickle.load(open(CNN+'processedData/Texts.pkl','rb'))
-fullTextSentences = pickle.load(open(CNN+'processedData/textSentences.pkl','rb'))
 
 ## 1. Merge into one single document string 
 # Since spacy takes the whole string as resolution input, so first need to merge lsls into one document text
@@ -42,19 +34,6 @@ def merge_doc(lsls):
             elif word != '\n':   
                 doc_str += " " + word                
     return doc_str
-
-# preprocess the document string (removing unusual periods: U.S.A, Dr.Who)
-def preprocess(doc_str):
-
-    ## Remove . in acronyms 
-    ## NOTE: not distinguishing if the acronym ends the sentence (where period should be kept)
-    doc = re.sub(r'(?<!\w)([A-Z])\.', r'\1', doc_str)
-    ## TODO: use Regex not for-loop
-    for k, v in period_ls.items():
-        doc = doc.replace(k, v)
-    return doc
-
-fullText = [preprocess(merge_doc(x)) for x in fullTextSentences]
 
 ## 2. Functions to help locate coreference clusters and their mentions:
 #Since spacy gives the arbitrary position of each mention (sometimes that does not align with the word positions we have depending on how they break their sentences/words/punctuations), building a dictionary that stores both sentence start and ending positions to help search flexibly in a range.
@@ -238,7 +217,7 @@ def mark_sentence(sen, highlight_index):
 def resolve_single_doc(doc_index, dict):
     lsls = deepcopy(dict[doc_index])
     sentence_pos  = label_positions(lsls) 
-    full = preprocess(merge_doc(lsls))
+    full = merge_doc(lsls)
     mod = nlp(full) ## using fullText here
     resolution(mod, sentence_pos, full, lsls)
     return
@@ -252,15 +231,17 @@ def resolve_all(dict):
     for doc_id, doc in dict.items():
         doc_copy = deepcopy(doc)
         sentence_pos  = label_positions(doc_copy) 
-        full = preprocess(merge_doc(doc_copy))
+        full = merge_doc(doc_copy)
         mod = nlp(full)
         resolution(mod, sentence_pos, full, doc_copy)
         resolved_dict[doc_id] = doc_copy
     return resolved_dict
 
-## Testing
+## MACRO
 nlp = en_coref_md.load()
 DEBUG = 0
 PRINT = 0
-#CNN = resolve_all(fullTextSentences[:2])
-# takes ~30min for 1000 documents
+
+## For testing
+# CNN = resolve_all(fullTextSentences[:2])
+# Note: takes ~30min for 1000 documents

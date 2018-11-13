@@ -12,9 +12,6 @@ from copy import deepcopy
 ## 1. Merge into one single document string 
 # Since spacy takes the whole string as resolution input, so first need to merge lsls into one document text
 
-## hard coding for some examples of exception 
-period_ls = {'Mr.': 'Mr', 'Mrs.': 'Mrs', 'Dr.': 'Dr', 'Gov.':'Gov'}
-
 def is_punctuation(word):
     ## corner case: U.S.A
     if word == '.': 

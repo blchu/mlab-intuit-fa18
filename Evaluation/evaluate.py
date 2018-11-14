@@ -89,8 +89,8 @@ for d in dp:
 			rouge_scores = rouge.get_scores(summary,d['u_abstract'])
 			#matching key names allows for easy incremenation of rouge metrics
 			for r in rouge_scores:
-				for k in r:
-					m[r][k]+=rouge_scores[r][k]
+					for k in rouge_scores[r]:
+						m[r][k]+=rouge_scores[r][k]
 			#Get threshold predicitions 0 if less than thresh 1 if greater
 			predictions = [int(prob>thresh) for prob in p]
 			#get ROC metrics
@@ -105,7 +105,7 @@ for m in metrics:
 	#for test in this set of metrics i.e. rouge-1
 	for t in m:
 		#for value in test i.e 'f'
-		for k in t:
+		for k in m[t]:
 			m[t][k]/=count
 
 print("Creating Rouge Curves")
@@ -118,20 +118,26 @@ def graphRouge(k)
 	y_1 = [m['rouge-1'][k] for m in metrics]
 	y_2 = [m['rouge-2'][k] for m in metrics]
 	y_l = [m['rouge-l'][k] for m in metrics]
+	avg = [(y_1i+y_2i+y_li)/3 for y_1i,y_2i,y_li in zip(y_1,y_2,y_l)]
 	plt.plot(x,y_1)
 	plt.plot(x,y_2)
 	plt.plot(x,y_l)
-	plt.legend(['Rouge-1', 'Rouge-2', 'Rouge-l'], loc='upper left')
+	plt.legend(['Rouge-1', 'Rouge-2', 'Rouge-l','Average Rouge Score'], loc='upper left')
 	print(f"Showing {k} curve")
 	plt.show()
 #Graph precision, recall and f1
 graphRouge('p')
 graphRouge('r')
 graphRouge('f')
+max_f = max(metrics,key=lambda m:(m['rouge-1']['f']+m['rouge-2']['f']+m['rouge-l']['f'])/3)
+for i,m in enumerate(metrics):
+	if(m==max_f):
+		print("Best Threshold ",i)
+		break
 
 print("Creating ROC Curve")
-ROC_Curve_x = [m[1][1] for m in metrics]
-ROC_Curve_y = [m[1][0] for m in metrics]
+ROC_Curve_x = [m['ROC']['fpr'] for m in metrics]
+ROC_Curve_y = [m['ROC']['tpr'] for m in metrics]
 #Area under the curve approximation for ROC curve
 area = 0
 for i in range(num_thresholds-1):

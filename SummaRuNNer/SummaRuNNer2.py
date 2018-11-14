@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0,'../CommonTPFs')
 from commonFunctions import *
 import matplotlib.pyplot as plt
+from rouge import Rouge
 
 #Specifiy training method
 #Adds additional sequential model to be used in training
@@ -13,9 +14,9 @@ ABSTRACTIVE = False
 EXTRACTIVE = not ABSTRACTIVE
 #variable specificies whether to start from scratch
 #or initialize using prior trained weights
-USE_LAST = False
+USE_LAST = True
 #0->Train, 1->Use
-MODE = 0
+MODE = 1
 
 #Number of values used in encoding words
 WORD_VECTOR_DIM = 50
@@ -147,6 +148,9 @@ Weight_salience = weight([NUM_SENTENCE_UNITS*2,DOC_EMBEDDING_LENGTH])
 #Novelty weight
 Weight_novelty = weight([NUM_SENTENCE_UNITS*2,NUM_SENTENCE_UNITS*2])
 
+#Position weight
+Weight_Position = weight([1,1])
+
 #Probability bias
 Bias_p = tf.Variable(0.0)
 
@@ -180,13 +184,18 @@ for i in range(NUM_SENTENCES):
 	#they appear in the summary.  Contribution is negative because repition is not desired.
 	novelty_contribution = -tf.matmul(hT,tf.matmul(Weight_novelty,tf.tanh(s)))
 
+	#Allows the network to consider the absolute position of the sentence in it's prediction
+	#We scale a weight by log(1+i) where i is the position
+	position_contribution = tf.log1p(tf.cast(i,tf.float32))*Weight_Position
+
 	#Sums contributions and bias to create overall sigmoid input
-	sigmoid_input = content_contribution+salience_contribution+novelty_contribution+Bias_p
+	sigmoid_input = content_contribution+salience_contribution+novelty_contribution+position_contribution+Bias_p
 
 	#Computes probability sentence is in summary
 	p = tf.sigmoid(sigmoid_input)
 
 	#Adds p to list of probabilities
+	#p will bea 1x1 tensor this accounted for later.
 	probabilities.append(p)
 
 	#Update dynamic summary representation vector
@@ -216,7 +225,7 @@ probabilities_tensor = tf.reshape(tf.boolean_mask(tf.stack(probabilities),senten
 #Takes in probabilities for each sentence and corresponding text
 #Returns a string containing each sentence for which the corresponding
 #probability is greater than 0.5
-def generateSummary(probabilities,text,threshold=0.5):
+def generateSummary(probabilities,text,threshold=0.1):
 	summary = []
 	#iterate through probabilities
 	for i in range(len(probabilities)):
@@ -580,7 +589,7 @@ if(EXTRACTIVE):
 
 		print("Loading trained variables")
 		saver.restore(sess,"saved_models/SR_EXT.ckpt")
-
+		
 		#Takes in predicitons and label
 		#Returns (true postitive rate, false positive rate)
 		def ROC_Analysis(p,t):
@@ -609,16 +618,17 @@ if(EXTRACTIVE):
 
 		num_thresholds = 101
 		thresholds = [i/100 for i in range(num_thresholds)]
+		
 		#First sub list Rouge metrics, then ROC
 		#Rouge metrics are precision,recall,rouge score
 		#ROC metrics are true positive rate, false positive rate
-		metrics = [[[0,0,0],[0,0]] for _ in range(num_thresholds)]
+		metrics = [{'rouge-1':{'f':0,'p':0,'r':0},'rouge-2':{'f':0,'p':0,'r':0},
+					'rouge-l':{'f':0,'p':0,'r':0},'ROC':{'tpr':0,'fpr':0}} 
+					for _ in range(num_thresholds)]
 		count = 0
-		#Function that returns precision recall in the context of ROUGE N=1
-		N_rouge = 1
-		precision_recall_R = rougeNScorer(1)
 
-		print("Performing Metric Analysis")
+		rouge = Rouge()
+		print("Calculating metrics...")
 		for d in zipped_data:
 			count+=1
 			print(f"Analyzing {count}",end='\r')
@@ -628,32 +638,65 @@ if(EXTRACTIVE):
 				summary = generateSummary(p,d['u_full_text'],thresh)
 				#summary will be none if prediction entailed 0 length summary
 				if(summary):
+					#metrics for this threshold
+					m = metrics[i]
 					#get rouge metrics
-					precision,recall,rouge = precision_recall_R(d['u_abstract'],summary)
-					#Increment rouge metrics
-					metrics[i][0][0]+=precision
-					metrics[i][0][1]+=recall
-					metrics[i][0][2]+=rouge
+					rouge_scores = rouge.get_scores(' '.join(summary),' '.join(d['u_abstract']))[0]
+					#matching key names allows for easy incremenation of rouge metrics
+					for r in rouge_scores:
+						for k in rouge_scores[r]:
+							m[r][k]+=rouge_scores[r][k]
 					#Get threshold predicitions 0 if less than thresh 1 if greater
 					predictions = [int(prob>thresh) for prob in p]
 					#get ROC metrics
 					tpr,fpr = ROC_Analysis(predictions,d['text_labels'])
 					#Increment ROC metrics
-					metrics[i][1][0]+=tpr
-					metrics[i][1][1]+=fpr
+					m['ROC']['tpr']+=tpr
+					m['ROC']['fpr']+=fpr
 		print("")
-		print("Calculating metric averages")
-		#Get the average for each metric
+		
+		print("Calculating metric averages...")
+		#Get the average for each metric by threshold
 		for m in metrics:
-			m[0][0]/=count
-			m[0][1]/=count
-			m[0][2]/=count
-			m[1][0]/=count
-			m[1][1]/=count
+			#for test in this set of metrics i.e. rouge-1
+			for t in m:
+				#for value in test i.e 'f'
+				for k in m[t]:
+					m[t][k]/=count
+
+		print("Creating Rouge Curves")
+		#k is either 'f', 'p', or 'r'
+		#graphs scores vs threshold value
+		def graphRouge(k):
+			print(f"Creating {k} curve")
+			x = np.array(thresholds)
+			#Get metrics for every threshold
+			y_1 = [m['rouge-1'][k] for m in metrics]
+			y_2 = [m['rouge-2'][k] for m in metrics]
+			y_l = [m['rouge-l'][k] for m in metrics]
+			avg = [(y_1i+y_2i+y_li)/3 for y_1i,y_2i,y_li in zip(y_1,y_2,y_l)]
+			plt.plot(x,y_1)
+			plt.plot(x,y_2)
+			plt.plot(x,y_l)
+			plt.plot(x,avg)
+			plt.plot()
+			plt.legend(['Rouge-1', 'Rouge-2', 'Rouge-l','Average'], loc='upper left')
+			print(f"Showing {k} curve")
+			plt.show()
+		#Graph precision, recall and f1
+		graphRouge('p')
+		graphRouge('r')
+		graphRouge('f')
+		max_f = max(metrics,key=lambda m:(m['rouge-1']['f']+m['rouge-2']['f']+m['rouge-l']['f'])/3)
+		for i,m in enumerate(metrics):
+			if(m==max_f):
+				print("Best Threshold ",i)
+				break
+
 		print("Creating ROC Curve")
-		ROC_Curve_x = [m[1][1] for m in metrics]
-		ROC_Curve_y = [m[1][0] for m in metrics]
-		#Area under the curve approximation
+		ROC_Curve_x = [m['ROC']['fpr'] for m in metrics]
+		ROC_Curve_y = [m['ROC']['tpr'] for m in metrics]
+		#Area under the curve approximation for ROC curve
 		area = 0
 		for i in range(num_thresholds-1):
 			avg_height = (ROC_Curve_y[i]+ROC_Curve_y[i+1])/2
@@ -664,4 +707,4 @@ if(EXTRACTIVE):
 		plt.xlim(0,1)
 		plt.ylim(0,1)
 		print("Showing ROC Curve")
-		plt.show()
+		#plt.show()

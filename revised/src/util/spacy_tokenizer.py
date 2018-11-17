@@ -12,7 +12,7 @@ def tokenize_document(text):
     while True:
         try:
             sent = next(sents)
-            tokens.append([token.string.strip for token in sent
+            tokens.append([token.string.strip() for token in sent
                            if str(token) not in string.whitespace])
         except StopIteration:
             break

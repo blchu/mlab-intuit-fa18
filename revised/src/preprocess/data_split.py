@@ -1,7 +1,7 @@
 from random import shuffle
 
 def split_data(doc_id_set, train_portion = 0.8, test_portion = 0.1,
-                num_val_subset = 1000, num_test_subset = 1000):
+                num_val_subset = 1000, num_train_subset= 1000):
 
     # Make sure proportions are valid
     assert train_portion + test_portion <= 1
@@ -38,19 +38,19 @@ def split_data(doc_id_set, train_portion = 0.8, test_portion = 0.1,
         shuffle(validation_ids)
         val_subset = validation_ids[:num_val_subset]
 
-    if(len(test_ids) < num_test_subset):
+    if(len(train_ids) < num_train_subset):
         # Return the whole validation set if num_test_subset is too big
-        test_subset = test_ids
+        train_subset = test_ids
     else:
         # Return a random subset wiht num_test_subset elemtents
-        shuffle(test_ids)
-        test_subset = test_ids[:num_test_subset]
+        shuffle(train_ids)
+        train_subset = train_ids[:num_train_subset]
 
 
 
-    return {"train": set(train_ids), "val": set(validation_ids),
-            "test": set(test_ids), "val_subset":set(val_subset) ,
-            "test_subset": set(test_subset) }
+    return {"train": train_ids, "val": validation_ids,
+            "test": test_ids, "val_subset": val_subset,
+            "train_subset": train_subset }
 
 
 

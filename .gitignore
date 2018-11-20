@@ -1,1 +1,4 @@
 .DS_Store
+*.pyc
+PointerGeneratorNetworks/dataset/
+PointerGeneratorNetworks/logs/

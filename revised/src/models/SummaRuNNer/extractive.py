@@ -257,7 +257,7 @@ def train(data,validation):
 		return l/i
 
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
-	LEARNING_RATE = 4e-3
+	LEARNING_RATE = 1e-4
 	print("Creating training algorithm...")
 	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
 	#Create saver/loader

@@ -38,13 +38,6 @@ print(f"Analyzing model...")
 print("Loading predictions...")
 predictions = json.load(open(model+'/outputs/predictions.json','r'))
 
-#data and predictions for validation dataset stored in one data structure
-val_data = [{'text_labels':labels[d_id],
-	'abstract': abstracts[d_id],
-	'full_text_sentences': full_text_sentences[d_id],
-	'probabilities': predictions[d_id]}
-	for d_id in val_docs if abstracts[d_id]][:NUM_VAL_DOCS]
-
 
 #Takes in probabilities for each sentence and corresponding text
 #Returns a string containing each sentence for which the corresponding
@@ -57,14 +50,22 @@ def generateSummary(probabilities,text,threshold=0.5):
 		if(probabilities[i]>=threshold): summary+=text[i]
 	return summary
 
+#Library rouge scorer
+rouge = Rouge()
 
 num_thresholds = 102
 thresholds = [i/100 for i in range(num_thresholds)]
+
 #Stores rouge scores for each threshold on each document
 val_rouge = [{'rouge-1':0,'rouge-2':0,'rouge-l':0} for _ in range(num_thresholds)]
 
-#Library rouge scorer
-rouge = Rouge()
+#data and predictions for validation dataset stored in one data structure
+val_data = [{'text_labels':labels[d_id],
+	'abstract': abstracts[d_id],
+	'full_text_sentences': full_text_sentences[d_id],
+	'probabilities': predictions[d_id]}
+	for d_id in val_docs if abstracts[d_id]][:NUM_VAL_DOCS]
+
 
 count = 0
 
@@ -98,6 +99,7 @@ for i,m in enumerate(val_rouge):
 print("Optimal Model Threshold:",i/100)
 print()
 
+best_threshold = 0.5
 test_docs = data_splits['test']
 if(not NUM_TEST_DOCS): NUM_TEST_DOCS = len(test_docs)
 

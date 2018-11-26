@@ -257,7 +257,7 @@ def train(data,validation):
 		return l/i
 
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
-	LEARNING_RATE = 1e-4
+	LEARNING_RATE = 3e-5
 	print("Creating training algorithm...")
 	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
 	#Create saver/loader
@@ -495,12 +495,13 @@ if(MODE==0):
 	train(zipped_data,validation_data)
 #USE
 elif(MODE==1):
+	#Make predictions for both test and validation for evaluation
 	zipped_data = [{'text_labels':labels[d_id],
 					'abstract': abstracts[d_id],
 					'u_full_text': unvectorized_full_texts[d_id],
 					'doc_id':d_id}
-					for d_id in test_docs]
-	print(f"Making predictions for {len(zipped_data)} test documents")
+					for d_id in test_docs+validation_docs]
+	print(f"Making predictions for {len(zipped_data)} test/validation documents")
 	predict(zipped_data)
 
 

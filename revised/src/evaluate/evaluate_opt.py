@@ -87,14 +87,22 @@ if(not best_threshold):
 		#Have it predict 0 for all other sentences
 		p+=[0]*(len(d['text_labels'])-len(p))
 
+		prev_summary,prev_scores = None,None
 		for i,thresh in enumerate(thresholds):
 			summary = generateSummary(p,d['full_text_sentences'],thresh)
 			#summary will be "" if prediction entailed 0 length summary
 			if(summary):
-				rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
+				#Avoid redundant calculation of rouge scores if the summary
+				#is no different than for the last threshold
+				if(summary==prev_summary):
+					rouge_scores = prev_scores
+				else:
+					rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
 				#Increment scores
 				for r in ['rouge-1','rouge-2','rouge-l']:
 					val_rouge[i][r]+=rouge_scores[r]['f']
+				#Save summary and rouge scores
+				prev_summary,prev_scores = summary,rouge_scores
 	print()
 	print()
 	print("Finding Optimal Threshold based on Validation Evaluation...")

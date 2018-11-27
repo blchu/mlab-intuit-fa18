@@ -101,14 +101,21 @@ for d in [dp for dp in test_data if dp['abstract']]:
 	#Have it predict 0 for all other sentences
 	p+=[0]*(len(d['text_labels'])-len(p))
 
+	prev_summary,prev_scores = None,None
 	for i,thresh in enumerate(thresholds):
 		summary = generateSummary(p,d['full_text_sentences'],thresh)
 		#summary will be none if prediction entailed 0 length summary
 		if(summary):
 			#metrics for this threshold
 			m = metrics[i]
-			#get rouge metrics
-			rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
+			#Avoid redundant calculation of rouge scores if the summary
+			#is no different than for the last threshold
+			if(summary==prev_summary):
+				rouge_scores = prev_scores
+			else:
+				rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
+			#Save summary and rouge scores
+			prev_summary,prev_scores = summary,rouge_scores
 			#matching key names allows for easy incremenation of rouge metrics
 			for r in rouge_scores:
 					for k in rouge_scores[r]:

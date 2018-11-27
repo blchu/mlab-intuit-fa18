@@ -24,5 +24,10 @@ Recall:    36.29 vs 40.68|
 F1 score:  24.13 vs 36.67|
 _________________________|
 
+Average Word Counts
+Model: 83.70958083832335 words
+Label: 53.50958083832335 words
+Human: 50.23652694610779 words
+
 Area Under ROC Curve = 0.876
 (ROC Curve shown separately)

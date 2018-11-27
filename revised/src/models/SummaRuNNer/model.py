@@ -241,23 +241,8 @@ def train(data,validation):
 	#Initialize the session
 	sess = tf.Session()
 
-	#Return the average loss of the first num_texts texts
-	def averageLoss(num_texts):
-		#Variable to keep track of loss
-		l = 0
-		#Count of texts used so far
-		i = 0
-		#Iterate through texts
-		for abstract,full_text,summary_ohe in zipped_data:
-			#Calculate loss for this text and add
-			l+=sess.run(loss,feed_dict=get_feed_dict(abstract,full_text,summary_ohe))
-			#Break once use number of texts have been used
-			i+=1
-			if(i>=num_texts): break
-		return l/i
-
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
-	LEARNING_RATE = 3e-5
+	LEARNING_RATE = 1e-5
 	print("Creating training algorithm...")
 	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
 	#Create saver/loader
@@ -292,7 +277,7 @@ def train(data,validation):
 			count+=1
 			print(f"Validating {count}/{num_val}",end='\r')
 			#Computes probs and loss for text
-			p,l = sess.run([probabilities_tensor,loss],feed_dict=get_feed_dict(d))
+			p,l = sess.run([probabilities_tensor,loss],feed_dict=get_feed_dict_train(d))
 			#Ensures that at least one sentence is included in summary
 			p[np.argmax(p)]=1
 			#Generate summary
@@ -368,7 +353,7 @@ def train(data,validation):
 
 			count+=1
 			print(f"Train {count}",end='\r')
-			train_step.run(feed_dict=get_feed_dict(d),session=sess)
+			train_step.run(feed_dict=get_feed_dict_train(d),session=sess)
 
 
 def predict(data):
@@ -387,7 +372,7 @@ def predict(data):
 	for d in data:
 		count+=1
 		print(f"Summarizing {count}/{n}",end='\r')
-		p = sess.run(probabilities_tensor,feed_dict=get_feed_dict(d))
+		p = sess.run(probabilities_tensor,feed_dict=get_feed_dict_predict(d))
 		#Ensures that at least one sentence is included in summary
 		p[np.argmax(p)]=1
 		predictions[d['doc_id']]=p.tolist()
@@ -410,16 +395,13 @@ extractive_label = tf.placeholder(tf.float32,[None])
 loss = tf.losses.log_loss(labels=extractive_label,predictions=probabilities_tensor)
 
 #Load required data
-print("Loading data...")
+print("Loading general data...")
 try:
     data=sys.argv[1]
 except:
     print('Please pass directory containing data')
 
-abstracts = json.load(open(data+'/abstracts.json','r'))
 unvectorized_full_texts = json.load(open(data+'/fulltexts.json','r'))
-labels = json.load(open(data+'/labels.json','r'))
-full_text_sentences = json.load(open(data+'/sentence_tokens.json','r'))
 
 #Load data splits contains references to documents
 #which should be used for each of 3 tasks.
@@ -434,8 +416,9 @@ def get_word_vector(w):
     if(w in word_vectors): return word_vectors[w]
     return np.zeros(WORD_VECTOR_DIM)
 
-#Go through a data point and return feed_dict to run graph
-def get_feed_dict(d):
+#Returns a feed dict including label information
+#Used for training or measuring performance on validation set
+def get_feed_dict_train(d):
 	#Get necessary components from data point
 	u_full_text = d['u_full_text']
 	labels = d['text_labels']
@@ -446,6 +429,7 @@ def get_feed_dict(d):
 			u_full_text.pop(i)
 			labels.pop(i)
 		else: i+=1
+	#Truncate full text and labels if longer than NUM_SENTENCES
 	if(len(u_full_text)>NUM_SENTENCES): 
 		u_full_text = u_full_text[:NUM_SENTENCES]
 		labels = labels[:NUM_SENTENCES]
@@ -469,17 +453,53 @@ def get_feed_dict(d):
 	#Return feed dict
 	return fd
 
+#Returns feed dict for predictions doesn't include label information
+#Used when generating predictions
+def get_feed_dict_predict(d):
+	#Get necessary components from data point
+	u_full_text = d['u_full_text']
+	#Remove 0 length sentences from full_text
+	i = 0
+	while(i<len(u_full_text)):
+		if(len(u_full_text[i])==0):
+			u_full_text.pop(i)
+		else: i+=1
+	#Truncate full textif longer than NUM_SENTENCES
+	if(len(u_full_text)>NUM_SENTENCES): 
+		u_full_text = u_full_text[:NUM_SENTENCES]
+	#Initialize padded_text to the original text vectorized
+	padded_text = [[get_word_vector(w) for w in s] for s in u_full_text]
+	#Mask is used to allow network to toss out filler sentences later
+	mask = [True]*min(len(padded_text),NUM_SENTENCES)
+	#Filler sentence equivalent to sentence with one word whose word embedding is the zero vector
+	#This allows for consistent and predictable behaviour on rest of netowork.
+	fillerSentence = np.array([np.zeros(WORD_VECTOR_DIM)])
+	#Pad text if necessary and complete mask with False values where fillers are present
+	while(len(padded_text)<NUM_SENTENCES):
+		padded_text.append(fillerSentence)
+		mask.append(False)
+	#Assign sentences from text to placeholders
+	#Note if the there are more sentences in the text than NUM_SENTENCES those sentences will not be considered.
+	fd = {placeholder:sentence for placeholder,sentence in zip(word_embeddings,padded_text)}
+	#Provide values for other placeholders
+	fd[sentences_present] = mask
+	#Return feed dict
+	return fd
 
 #Depending on mode create dictionary of appropriate data
 #and either train or use model
 #TRAIN
 if(MODE==0):
-	count = 0
+	print("Loading training specific data...")
+	labels = json.load(open(data+'/labels.json','r'))
+	full_text_sentences = json.load(open(data+'/sentence_tokens.json','r'))
+	abstracts = json.load(open(data+'/abstracts.json','r'))
+
 	zipped_data = [{'text_labels':labels[d_id],
-						'abstract': abstracts[d_id],
-						'u_full_text': unvectorized_full_texts[d_id],
-						'full_text_s':full_text_sentences[d_id]}
-						for d_id in training_docs]
+					'abstract': abstracts[d_id],
+					'u_full_text': unvectorized_full_texts[d_id],
+					'full_text_s':full_text_sentences[d_id]}
+					for d_id in training_docs]
 	#If we want to use only a portion of the whole training set
 	if(NUM_DOCS_TRAIN): zipped_data = zipped_data[:NUM_DOCS_TRAIN]
 	print(f"Training with {len(zipped_data)} documents")
@@ -496,9 +516,7 @@ if(MODE==0):
 #USE
 elif(MODE==1):
 	#Make predictions for both test and validation for evaluation
-	zipped_data = [{'text_labels':labels[d_id],
-					'abstract': abstracts[d_id],
-					'u_full_text': unvectorized_full_texts[d_id],
+	zipped_data = [{'u_full_text': unvectorized_full_texts[d_id],
 					'doc_id':d_id}
 					for d_id in test_docs+validation_docs]
 	print(f"Making predictions for {len(zipped_data)} test/validation documents")

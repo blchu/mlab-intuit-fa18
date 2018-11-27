@@ -1,2 +1,0 @@
-model_checkpoint_path: "SR_EXT.ckpt"
-all_model_checkpoint_paths: "SR_EXT.ckpt"

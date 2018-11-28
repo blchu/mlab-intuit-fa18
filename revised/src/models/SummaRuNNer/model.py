@@ -6,6 +6,7 @@ import sys
 from rouge import Rouge
 import os
 import matplotlib.pyplot as plt
+import random
 
 #variable specificies whether to start from scratch
 #or initialize using weights trained from previous run
@@ -242,7 +243,7 @@ def train(data,validation):
 	sess = tf.Session()
 
 	#Create training algorithm using LEARNING_RATE and set EPOCHS
-	LEARNING_RATE = 1e-5
+	LEARNING_RATE = 5e-5
 	print("Creating training algorithm...")
 	train_step = tf.train.AdamOptimizer(LEARNING_RATE).minimize(loss)
 	#Create saver/loader
@@ -399,15 +400,19 @@ print("Loading general data...")
 try:
     data=sys.argv[1]
 except:
-    print('Please pass directory containing data')
+    raise Exception('Please pass directory containing data')
 
 unvectorized_full_texts = json.load(open(data+'/fulltexts.json','r'))
 
 #Load data splits contains references to documents
 #which should be used for each of 3 tasks.
+#Randomly shuffle training and validation so no subset
+#is given priority
 data_splits = json.load(open(data+'/data_splits.json','r'))
 training_docs = data_splits['train']
+random.shuffle(training_docs)
 validation_docs = data_splits['val']
+random.shuffle(validation_docs)
 test_docs = data_splits['test']
 
 word_vectors = pickle.load(open('model_specific_files/wv.pkl','rb'))

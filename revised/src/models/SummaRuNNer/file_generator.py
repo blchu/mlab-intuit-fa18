@@ -7,7 +7,7 @@ import os
 try:
     data=sys.argv[1]
 except:
-    print('Please pass directory containing data')
+    raise Exception('Please pass directory containing data')
 
 print("Loading data...")
 full_text_words = json.load(open(data+'/fulltexts.json','r'))

@@ -3,6 +3,7 @@ import json
 from rouge import Rouge
 import matplotlib.pyplot as plt
 import sys
+import os
 
 '''
 Evaluate a model by running evaluate.py <data folder> <model folder>
@@ -22,8 +23,9 @@ print("Loading data...")
 try:
     data=sys.argv[1]
     model=sys.argv[2]
+    model_name = model[model.rfind('/')+1:]
 except:
-    print('Please pass directory containing data')
+    raise Exception('Please pass directories containing data and model')
 
 abstracts = json.load(open(data+'/abstracts.json','r'))
 full_text_sentences = json.load(open(data+'/sentence_tokens.json','r'))
@@ -33,7 +35,7 @@ data_splits = json.load(open(data+'/data_splits.json','r'))
 val_docs = data_splits['val']
 if(not NUM_VAL_DOCS): NUM_VAL_DOCS = len(val_docs)
 
-print(f"Analyzing model...")
+print(f"Analyzing {model_name}...")
 
 print("Loading predictions...")
 predictions = json.load(open(model+'/outputs/predictions.json','r'))
@@ -239,7 +241,7 @@ for r in ['rouge-1','rouge-2','rouge-l']:
 
 print()
 print("Average Word Counts")
-print(f"Model: {model_word_count} words")
+print(f"{model_name}: {model_word_count} words")
 print(f"Label: {label_word_count} words")
 print(f"Human: {human_word_count} words")
 print()
@@ -252,6 +254,15 @@ for i in range(num_thresholds-1):
 	avg_height = (ROC_Curve_y[i]+ROC_Curve_y[i+1])/2
 	interval_length = (ROC_Curve_x[i]-ROC_Curve_x[i+1])
 	area+=avg_height*interval_length
+#Create Directory to store the ROC Curves if it doesn't already exist
+if not os.path.exists('ROC_Curves'):
+    os.makedirs('ROC_Curves')
+#Save ROC Curve
+print("Saving ROC Curve...")
+ROC_Curve = {'x':ROC_Curve_x,'y':ROC_Curve_y}
+json.dump(ROC_Curve,open("ROC_Curves/"+model_name+"_ROC.json",'w'))
+
+#Display ROC Curve
 print(f"Area under ROC Curve {area}")
 plt.plot(ROC_Curve_x,ROC_Curve_y)
 plt.xlim(0,1)
@@ -259,5 +270,5 @@ plt.xlabel('False Positive Rate')
 plt.ylim(0,1)
 plt.ylabel('True Positive Rate')
 print("Showing ROC Curve")
-plt.title("ROC Curve")
+plt.title(f"{model_name} ROC Curve")
 plt.show()

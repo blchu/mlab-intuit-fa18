@@ -1,5 +1,3 @@
-evaluate_opt (current)
-
 Using the validation dataset the optimal threshold which maximizes
 Rouge scores is determined.  Then on the test dataset Rouge Scores
 are calcuated with this threshold and compared to the Rouge Scores
@@ -16,15 +14,3 @@ from both the validation and test dataset to a list of probability predictions.
 
 <data folder> should contain abstracts.json, sentence_tokens.json, data_splits.json,
 and labels.json.
-
-evaluate_all (old)
-
-Originally evaluation was done only using the test dataset.  All
-threshold values between 0 and 1 with intervals of 0.01 were tried.
-Rouge scores for the resulting predictions were plotted along with
-precision and recall values.  Finally a ROC curve was created.  We
-decided it was better to not plot Rouge scores for all thresholds,
-rather select a threshold before working with the test set as described
-above.
-
-To use run evaluate_all <data folder> <model folder>

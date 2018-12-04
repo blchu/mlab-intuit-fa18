@@ -40,6 +40,38 @@ print(f"Analyzing {model_name}...")
 print("Loading predictions...")
 predictions = json.load(open(model+'/outputs/predictions.json','r'))
 
+#data and predictions for validation dataset stored in one data structure
+val_data = [{'text_labels':labels[d_id],
+	'abstract': abstracts[d_id],
+	'full_text_sentences': full_text_sentences[d_id],
+	'probabilities': predictions[d_id]}
+	for d_id in val_docs if abstracts[d_id]][:NUM_VAL_DOCS]
+
+if os.path.exists('dl_groups.json'):
+	print("Loading Document Length Group Lower Bounds...")
+	dl_groups = json.load(open('dl_groups.json','r'))
+else:
+	#Construct list with each value representing the number of
+	#sentences in a particular document and sort.
+	dls = []
+	for d in val_data: dls.append(len(d['full_text_sentences']))
+	dls = sorted(dls)
+	#Number of doc_length groups to split into.  Each group will
+	#contain 10% of the document.
+	num_groups = 10
+	dl_groups = [dls[int(len(dls)*g/10)] for g in range(num_groups)]
+	json.dump(dl_groups,open('dl_groups.json','w'))
+
+num_groups = len(dl_groups)
+print("DL Groups Lower Bounds:",dl_groups)
+
+#accepts number of sentences and returns appropriate document length bin
+def get_dl_group(length):
+	if(length>dl_groups[num_groups-1]): return num_groups-1
+	i = 0
+	while(dl_groups[i+1]<length): i+=1
+	return i
+
 
 #Takes in probabilities for each sentence and corresponding text
 #Returns a string containing each sentence for which the corresponding
@@ -69,14 +101,6 @@ except:
 if(not best_threshold):
 	#Stores rouge scores for each threshold on each document
 	val_rouge = [{'rouge-1':0,'rouge-2':0,'rouge-l':0} for _ in range(num_thresholds)]
-
-	#data and predictions for validation dataset stored in one data structure
-	val_data = [{'text_labels':labels[d_id],
-		'abstract': abstracts[d_id],
-		'full_text_sentences': full_text_sentences[d_id],
-		'probabilities': predictions[d_id]}
-		for d_id in val_docs if abstracts[d_id]][:NUM_VAL_DOCS]
-
 
 	count = 0
 
@@ -121,6 +145,7 @@ if(not best_threshold):
 test_docs = data_splits['test']
 if(not NUM_TEST_DOCS): NUM_TEST_DOCS = len(test_docs)
 
+
 #data and predictions for test dataset stored in one data structure
 test_data = [{'text_labels':labels[d_id],
 	'abstract': abstracts[d_id],
@@ -154,8 +179,13 @@ def ROC_Analysis(p,t):
 	if(actual_negatives): false_positive_rate = false_positive_count/actual_negatives
 	return (true_positive_rate,false_positive_rate)
 
+#Rouge scores achieved by model and labels
 test_rouge = {'rouge-1':{'p':0,'r':0,'f':0},'rouge-2':{'p':0,'r':0,'f':0},'rouge-l':{'p':0,'r':0,'f':0}}
 label_rouge = {'rouge-1':{'p':0,'r':0,'f':0},'rouge-2':{'p':0,'r':0,'f':0},'rouge-l':{'p':0,'r':0,'f':0}}
+#test and label rouge by document length
+#For each document length bin find average p,r,f, aggregating the different scores
+test_rouge_bl = [{'p':0,'r':0,'f':0,'count':0} for i in range(num_groups)]
+label_rouge_bl = [{'p':0,'r':0,'f':0,'count':0} for i in range(num_groups)]
 
 test_ROC = [{'tpr':0,'fpr':0} for _ in range(num_thresholds)]
 
@@ -177,6 +207,8 @@ for d in test_data:
 	p+=[0]*(len(d['text_labels'])-len(p))
 	#Use only best threshold for generating summary
 	summary = generateSummary(p,d['full_text_sentences'],best_threshold)
+	#get document length bin for this text
+	dl_group = get_dl_group(len(d['full_text_sentences']))
 	#Increment model rouge metrics
 	if(summary):
 		rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
@@ -184,6 +216,9 @@ for d in test_data:
 		for r in ['rouge-1','rouge-2','rouge-l']:
 			for m in ['p','r','f']:
 				test_rouge[r][m]+=rouge_scores[r][m]
+				#Divide by 3 because 3 rouge scores and we want average
+				test_rouge_bl[dl_group][m]+=rouge_scores[r][m]/3
+		test_rouge_bl[dl_group]['count']+=1
 	#Generate label summary
 	label_summary = generateSummary(d['text_labels'],d['full_text_sentences'])
 	#Increment label rouge metrics
@@ -193,6 +228,8 @@ for d in test_data:
 		for r in ['rouge-1','rouge-2','rouge-l']:
 			for m in ['p','r','f']:
 				label_rouge[r][m]+=rouge_scores[r][m]
+				label_rouge_bl[dl_group][m]+=rouge_scores[r][m]/3
+		label_rouge_bl[dl_group]['count']+=1
 	#increment word count metrics
 	#word counts are the number of spaces in string + 1
 	model_word_count+=summary.count(' ')+1
@@ -215,6 +252,10 @@ for r in ['rouge-1','rouge-2','rouge-l']:
 		test_rouge[r][m]/=NUM_TEST_DOCS
 		label_rouge[r][m]/=NUM_TEST_DOCS
 
+for i in range(num_groups):
+	for m in ['p','r','f']:
+		test_rouge_bl[i][m]/=test_rouge_bl[i]['count']
+		label_rouge_bl[i][m]/=test_rouge_bl[i]['count']
 
 for t in test_ROC:
 	t['tpr']/=NUM_TEST_DOCS
@@ -272,3 +313,35 @@ plt.ylabel('True Positive Rate')
 print("Showing ROC Curve")
 plt.title(f"{model_name} ROC Curve")
 plt.show()
+
+print("Performing Document Length Bin Analysis...")
+plt.figure(figsize=(8,6))
+plt.subplot(221)
+plt.title("Precision vs Document Length Bin")
+tp = [r['p'] for r in test_rouge_bl]
+lp = [r['p'] for r in label_rouge_bl]
+plt.plot(range(num_groups),tp)
+plt.plot(range(num_groups),lp)
+plt.plot(range(num_groups),[lp[g]-tp[g] for g in range(num_groups)])
+
+plt.subplot(222)
+plt.title("Recall vs Document Length Bin")
+tr = [r['r'] for r in test_rouge_bl]
+lr = [r['r'] for r in label_rouge_bl]
+plt.plot(range(num_groups),tr)
+plt.plot(range(num_groups),lr)
+plt.plot(range(num_groups),[lr[g]-tr[g] for g in range(num_groups)])
+
+plt.subplot(223)
+plt.title("F1 vs Document Length Bin")
+tf = [r['f'] for r in test_rouge_bl]
+lf = [r['f'] for r in label_rouge_bl]
+plt.plot(range(num_groups),tf)
+plt.plot(range(num_groups),lf)
+plt.plot(range(num_groups),[lf[g]-tf[g] for g in range(num_groups)])
+
+plt.figlegend(labels=['Model','Labels','Difference'],loc='lower right')
+plt.tight_layout()
+plt.show()
+
+

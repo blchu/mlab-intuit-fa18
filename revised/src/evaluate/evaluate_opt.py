@@ -193,6 +193,10 @@ label_rouge = {'rouge-1':{'p':0,'r':0,'f':0},'rouge-2':{'p':0,'r':0,'f':0},'roug
 #For each document length bin find average p,r,f, aggregating the different scores
 test_rouge_bl = [{'p':0,'r':0,'f':0,'count':0} for i in range(num_groups)]
 label_rouge_bl = [{'p':0,'r':0,'f':0,'count':0} for i in range(num_groups)]
+#test and label rouge by document length
+#For each document length bin find average p,r,f, aggregating the different scores
+test_rouge_ns = {}
+label_rouge_ns = {}
 
 test_ROC = [{'tpr':0,'fpr':0} for _ in range(num_thresholds)]
 
@@ -214,7 +218,7 @@ avg = lambda rs,t: round(sum([rs[r][t] for r in rouge_score_types])/3,2)
 to_print = np.random.choice(NUM_TEST_DOCS,NUM_PRINT,replace=False)
 print("Will print for documents",to_print)
 
-print(f"Evalauating performance on {NUM_TEST_DOCS} test documents...")
+print(f"Evalauating performance and Collecting Metrics on {NUM_TEST_DOCS} test documents...")
 for d in test_data:
 	count+=1
 	print(f"Analyzing {count}/{NUM_TEST_DOCS}",end='\r')
@@ -226,6 +230,17 @@ for d in test_data:
 	summary = generateSummary(p,d['full_text_sentences'],best_threshold)
 	#get document length bin for this text
 	dl_group = get_dl_group(len(d['full_text_sentences']))
+	#number of sentences predicted by label
+	num_pred = sum(d['text_labels'])
+	if(num_pred not in test_rouge_ns):
+		#initialize test and label metrics for this number of sentences
+		test_rouge_ns[num_pred] = {'p':0,'r':0,'f':0,'count':0}
+		label_rouge_ns[num_pred] = {'p':0,'r':0,'f':0,'count':0}
+	#Increment counts for aggregate statistics
+	test_rouge_bl[dl_group]['count']+=1
+	test_rouge_ns[num_pred]['count']+=1
+	label_rouge_bl[dl_group]['count']+=1
+	label_rouge_ns[num_pred]['count']+=1
 	#Initialize to none in case either summary doesn't exist
 	test_rouge_scores,label_rouge_scores = None,None
 	#Increment model rouge metrics
@@ -237,7 +252,7 @@ for d in test_data:
 				test_rouge[r][m]+=test_rouge_scores[r][m]
 				#Divide by 3 because 3 rouge scores and we want average
 				test_rouge_bl[dl_group][m]+=test_rouge_scores[r][m]/3
-		test_rouge_bl[dl_group]['count']+=1
+				test_rouge_ns[num_pred][m]+=test_rouge_scores[r][m]/3
 	#Generate label summary
 	label_summary = generateSummary(d['text_labels'],d['full_text_sentences'])
 	#Increment label rouge metrics
@@ -247,8 +262,9 @@ for d in test_data:
 		for r in rouge_score_types:
 			for m in ['p','r','f']:
 				label_rouge[r][m]+=label_rouge_scores[r][m]
+				#Divide by 3 because 3 rouge scores and we want average
 				label_rouge_bl[dl_group][m]+=label_rouge_scores[r][m]/3
-		label_rouge_bl[dl_group]['count']+=1
+				label_rouge_ns[num_pred][m]+=label_rouge_scores[r][m]/3
 	#If we want to print generated/real summary do so
 	if((count-1) in to_print):
 		#easier access
@@ -297,7 +313,20 @@ for r in ['rouge-1','rouge-2','rouge-l']:
 for i in range(num_groups):
 	for m in ['p','r','f']:
 		test_rouge_bl[i][m]/=test_rouge_bl[i]['count']
-		label_rouge_bl[i][m]/=test_rouge_bl[i]['count']
+		label_rouge_bl[i][m]/=label_rouge_bl[i]['count']
+
+for np in test_rouge_ns:
+	for m in ['p','r','f']:
+		test_rouge_ns[np][m]/=test_rouge_ns[np]['count']
+		label_rouge_ns[np][m]/=label_rouge_ns[np]['count']
+
+#Only keep range of values for ns where all values in range have
+#were atleast predicted 10 times by labels
+#ms will be maximum of this range
+max_sent = 0
+while((max_sent+1) in test_rouge_ns and test_rouge_ns[(max_sent+1)]['count']>=10): max_sent+=1
+test_rouge_ns = [test_rouge_ns[i] for i in range(1,max_sent+1)]
+label_rouge_ns = [label_rouge_ns[i] for i in range(1,max_sent+1)]
 
 for t in test_ROC:
 	t['tpr']/=NUM_TEST_DOCS
@@ -338,12 +367,12 @@ for i in range(num_thresholds-1):
 	interval_length = (ROC_Curve_x[i]-ROC_Curve_x[i+1])
 	area+=avg_height*interval_length
 #Create Directory to store the ROC Curves if it doesn't already exist
-if not os.path.exists('ROC_Curves'):
-    os.makedirs('ROC_Curves')
+if not os.path.exists('Plots/ROC_Curves'):
+    os.makedirs('Plots/ROC_Curves')
 #Save ROC Curve
 print("Saving ROC Curve...")
 ROC_Curve = {'x':ROC_Curve_x,'y':ROC_Curve_y}
-json.dump(ROC_Curve,open("ROC_Curves/"+model_name+"_ROC.json",'w'))
+json.dump(ROC_Curve,open("Plots/ROC_Curves/"+model_name+"_ROC.json",'w'))
 
 #Display ROC Curve
 print(f"Area under ROC Curve {area}")
@@ -356,7 +385,7 @@ print("Showing ROC Curve")
 plt.title(f"{model_name} ROC Curve")
 plt.show()
 
-print("Performing Document Length Bin Analysis...")
+print("Document Length Bin Analysis")
 plt.figure(figsize=(8,6))
 plt.subplot(221)
 plt.title("Precision vs Document Length Bin")
@@ -382,8 +411,53 @@ plt.plot(range(num_groups),tf)
 plt.plot(range(num_groups),lf)
 plt.plot(range(num_groups),[lf[g]-tf[g] for g in range(num_groups)])
 
+#Create Directory to store the ROC Curves if it doesn't already exist
+if not os.path.exists('Plots/DLB_Analysis'):
+    os.makedirs('Plots/DLB_Analysis')
+#Save ROC Curve
+print("Saving DLB Analysis...")
+DLB = {'p':tp,'r':tr,'f':tf}
+json.dump(DLB,open('Plots/DLB_Analysis/'+model_name+'_DLB.json','w'))
+
 plt.figlegend(labels=['Model','Labels','Difference'],loc='lower right')
 plt.tight_layout()
 plt.show()
 
+print("Number of Sentences Predicted by Label Analysis")
+plt.figure(figsize=(8,6))
+plt.subplot(221)
+plt.title("Precision vs # of Sent Pred by Label")
+tp = [r['p'] for r in test_rouge_ns]
+lp = [r['p'] for r in label_rouge_ns]
+plt.plot(range(1,max_sent+1),tp)
+plt.plot(range(1,max_sent+1),lp)
+plt.plot(range(1,max_sent+1),[lp[g]-tp[g] for g in range(max_sent)])
+
+plt.subplot(222)
+plt.title("Recall vs # of Sent Pred by Label")
+tr = [r['r'] for r in test_rouge_ns]
+lr = [r['r'] for r in label_rouge_ns]
+plt.plot(range(1,max_sent+1),tr)
+plt.plot(range(1,max_sent+1),lr)
+plt.plot(range(1,max_sent+1),[lr[g]-tr[g] for g in range(max_sent)])
+
+plt.subplot(223)
+plt.title("F1 vs # of Sent Pred by Label")
+tf = [r['f'] for r in test_rouge_ns]
+lf = [r['f'] for r in label_rouge_ns]
+plt.plot(range(1,max_sent+1),tf)
+plt.plot(range(1,max_sent+1),lf)
+plt.plot(range(1,max_sent+1),[lf[g]-tf[g] for g in range(max_sent)])
+
+#Create Directory to store the ROC Curves if it doesn't already exist
+if not os.path.exists('Plots/NP_Analysis'):
+    os.makedirs('Plots/NP_Analysis')
+#Save ROC Curve
+print("Saving NP Analysis...")
+DLB = {'p':tp,'r':tr,'f':tf,'counts':[g['count'] for g in test_rouge_ns]}
+json.dump(DLB,open('Plots/NP_Analysis/'+model_name+'_NP.json','w'))
+
+plt.figlegend(labels=['Model','Labels','Difference'],loc='lower right')
+plt.tight_layout()
+plt.show()
 

@@ -18,6 +18,13 @@ NUM_VAL_DOCS = None
 #Set to none if want to use full test set
 NUM_TEST_DOCS = None
 
+#Number of documents you want generated/real summaries for.  These
+#documents will be randomly selected each run.
+NUM_PRINT = 3
+#If true Full Doc will be printed along with summaries if false only
+#summaries will be displayed
+PRINT_FULL_DOC = False
+
 #Load required data
 print("Loading data...")
 try:
@@ -197,6 +204,16 @@ human_word_count = 0
 
 count=0
 
+#Different rouge scores used
+rouge_score_types = ['rouge-1','rouge-2','rouge-l']
+
+#function used to get average scores
+avg = lambda rs,t: round(sum([rs[r][t] for r in rouge_score_types])/3,2)
+
+#select NUM_PRINT random indices to pick from 0,1,...NUM_TEST_DOCS-1
+to_print = np.random.choice(NUM_TEST_DOCS,NUM_PRINT,replace=False)
+print("Will print for documents",to_print)
+
 print(f"Evalauating performance on {NUM_TEST_DOCS} test documents...")
 for d in test_data:
 	count+=1
@@ -209,27 +226,52 @@ for d in test_data:
 	summary = generateSummary(p,d['full_text_sentences'],best_threshold)
 	#get document length bin for this text
 	dl_group = get_dl_group(len(d['full_text_sentences']))
+	#Initialize to none in case either summary doesn't exist
+	test_rouge_scores,label_rouge_scores = None,None
 	#Increment model rouge metrics
 	if(summary):
-		rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
+		test_rouge_scores = rouge.get_scores(summary,d['abstract'])[0]
 		#Increment scores for each metric
-		for r in ['rouge-1','rouge-2','rouge-l']:
+		for r in rouge_score_types:
 			for m in ['p','r','f']:
-				test_rouge[r][m]+=rouge_scores[r][m]
+				test_rouge[r][m]+=test_rouge_scores[r][m]
 				#Divide by 3 because 3 rouge scores and we want average
-				test_rouge_bl[dl_group][m]+=rouge_scores[r][m]/3
+				test_rouge_bl[dl_group][m]+=test_rouge_scores[r][m]/3
 		test_rouge_bl[dl_group]['count']+=1
 	#Generate label summary
 	label_summary = generateSummary(d['text_labels'],d['full_text_sentences'])
 	#Increment label rouge metrics
 	if(label_summary):
-		rouge_scores = rouge.get_scores(label_summary,d['abstract'])[0]
+		label_rouge_scores = rouge.get_scores(label_summary,d['abstract'])[0]
 		#Increment scores for each metric
-		for r in ['rouge-1','rouge-2','rouge-l']:
+		for r in rouge_score_types:
 			for m in ['p','r','f']:
-				label_rouge[r][m]+=rouge_scores[r][m]
-				label_rouge_bl[dl_group][m]+=rouge_scores[r][m]/3
+				label_rouge[r][m]+=label_rouge_scores[r][m]
+				label_rouge_bl[dl_group][m]+=label_rouge_scores[r][m]/3
 		label_rouge_bl[dl_group]['count']+=1
+	#If we want to print generated/real summary do so
+	if((count-1) in to_print):
+		#easier access
+		lrs = label_rouge_scores
+		trs = test_rouge_scores
+
+		print("")
+		print("")
+		print("DOCUMENT",count)
+		if(PRINT_FULL_DOC):
+			print(' '.join(d['full_text_sentences']))
+			print("")
+		print(f"Actual Summary for Doc {count}")
+		print(d['abstract'])
+		print("")
+		print(f"Labeled Summary p: {avg(lrs,'p')} r: {avg(lrs,'r')} f: {avg(lrs,'f')}")
+		print(label_summary)
+		print("")
+		avg_test_rouge = sum(test_rouge_scores[k]['f'] 
+			for k in rouge_score_types)/3
+		print(f"Model Generated Summary p: {avg(trs,'p')} r: {avg(trs,'r')} f: {avg(trs,'f')}")
+		print(summary)
+		print("")
 	#increment word count metrics
 	#word counts are the number of spaces in string + 1
 	model_word_count+=summary.count(' ')+1

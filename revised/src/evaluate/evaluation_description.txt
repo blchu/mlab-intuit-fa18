@@ -14,3 +14,16 @@ from both the validation and test dataset to a list of probability predictions.
 
 <data folder> should contain abstracts.json, sentence_tokens.json, data_splits.json,
 and labels.json.
+
+In addition to printing out statistics about scores, running evaluate_opt.py 
+will add files for each model to Plots (for various metrics)
+
+-ROC_Curves contain information about ROC curves
+
+-NP_Analysis contains analysis regarding breakdown by the 
+number of sentences predicted by label
+
+-DLB_Analysis contains analysis regarding breakdown by the
+length of the documented being summarized
+
+To compare different models on these metrics use compare.py

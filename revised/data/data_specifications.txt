@@ -1,0 +1,19 @@
+Data Format Specifications
+
+abstracts.json contains a dictionary mapping document ids to a single string which is the human written summary
+for that document.
+
+data_splits.json contains a dictionary with the keys ‘train’, ‘val’, and ‘test’.  Each key maps to a list containing the 
+document ids of the respective subset of the data (training data, validation data, and test data).
+
+fulltexts.json contains a dictionary mapping document ids to a list of lists representing a document.  The list of
+lists has a list for each sentence and each sentence is itself a list of words.  That is to say the document tokenized
+into words and grouped by sentence.
+
+labels.json contains a dictionary mapping document ids to a binary list of length equal to the number of sentences
+of the respective document.  A 1 indicates that the matching sentence should be retained in the summary.  The order
+of the labels correspond to the order the sentences appear in the document.
+
+sentence_tokens.json contains a dictionary mapping document ids to a list of strings representing a document. The
+list of strings has a list for each sentence and each sentence is a string that contains the unchanged sentence from
+the document.  That is to say the document split into sentences.

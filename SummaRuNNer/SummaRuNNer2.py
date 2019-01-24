@@ -9,7 +9,7 @@ from rouge import Rouge
 
 #Specifiy training method
 #Adds additional sequential model to be used in training
-ABSTRACTIVE = False
+ABSTRACTIVE = True
 #Trains directly of probability dist using labels given
 EXTRACTIVE = not ABSTRACTIVE
 #variable specificies whether to start from scratch

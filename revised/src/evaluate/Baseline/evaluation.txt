@@ -1,0 +1,33 @@
+Baseline Evaluation
+
+Threshold determined using Validation Data = 0.54
+
+Evaluation Performed on 1670 Test Documents
+
+ROUGE Comparison (Model Performance vs Label Performance)
+
+SCORE      MODEL    LABEL
+_________________________
+ROUGE 1                  |
+Precision: 18.18 vs 44.36|
+Recall:    45.28 vs 44.38|
+F1 score:  23.96 vs 42.37|
+                         |
+ROUGE 2                  |
+Precision: 7.93 vs 26.49 |
+Recall:    21.22 vs 25.72|
+F1 score:  10.60 vs 24.66|
+                         |
+ROUGE L                  |
+Precision: 16.59 vs 40.91|
+Recall:    41.55 vs 40.68|
+F1 score:  17.48 vs 36.67|
+_________________________|
+
+Average Word Counts
+baseline: 179.48 words
+Label: 53.51 words
+Human: 50.24 words
+
+Area Under ROC Curve = 0.748
+(ROC Curve shown separately)

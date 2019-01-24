@@ -1,0 +1,33 @@
+SummaRuNNer Evaluation
+
+Threshold determined using Validation Data = 0.16
+
+Evaluation Performed on 1670 Test Documents
+
+ROUGE Comparison (Model Performance vs Label Performance)
+
+SCORE      MODEL    LABEL
+_________________________
+ROUGE 1                  |
+Precision: 27.96 vs 44.36|
+Recall:    39.08 vs 44.38|
+F1 score:  30.28 vs 42.37|
+                         |
+ROUGE 2                  |
+Precision: 13.96 vs 26.49|
+Recall:    19.81 vs 25.72|
+F1 score:  15.01 vs 24.66|
+                         |
+ROUGE L                  |
+Precision: 25.08 vs 40.91|
+Recall:    35.00 vs 40.68|
+F1 score:  24.33 vs 36.67|
+_________________________|
+
+Average Word Counts
+SummaRuNNer: 77.60 words
+Label: 53.51 words
+Human: 50.24 words
+
+Area Under ROC Curve = 0.878
+(ROC Curve shown separately)

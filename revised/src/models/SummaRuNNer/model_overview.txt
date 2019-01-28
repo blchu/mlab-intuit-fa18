@@ -142,7 +142,7 @@ Inside the train function LEARNING_RATE and EPOCHS can be changed as desired.
 
 -----(5) How to Tune the Model-----
 
-There hasn’t been significant hyperparameter optimization conduced at the moment, nonetheless
+There hasn’t been significant hyperparameter optimization conducted at the moment, nonetheless
 the following parameters may be easily changed if one wishes to optimize performance.
 
 file_generator.py 

@@ -396,7 +396,10 @@ if(model_type==EXTRACTIVE):
 human_word_count/=NUM_TEST_DOCS
 
 print()
-print("ROUGE Comparison (Model Performance vs Label Performance)")
+if(model_type==EXTRACTIVE):
+	print("ROUGE Comparison (Model Performance vs Label Performance)")
+elif(model_type==ABSTRACTIVE):
+	print("ROUGE Scores")
 #Function used to get in percent format 0.123456 -> 12.35
 p = lambda v: round(v*100,2)
 for r in ['rouge-1','rouge-2','rouge-l']:

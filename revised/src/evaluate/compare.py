@@ -10,9 +10,9 @@ plt.ylim(0,1)
 plt.ylabel('True Positive Rate')
 plt.title("ROC Curves")
 #For each ROC Curve saved
-for file in [f for f in os.listdir('Plots/ROC_Curves') if '.json' in f]:
+for file in sorted([f for f in os.listdir('Plots/ROC_Curves') if '.json' in f]):
 	model_name = file[:file.index('.json')]
-	model_names.append(model_name)
+	model_names.append(model_name[:model_name.index('_')])
 	ROC_Curve = json.load(open('Plots/ROC_Curves/'+file,'r'))
 	x = ROC_Curve['x']
 	y = ROC_Curve['y']
@@ -23,10 +23,10 @@ plt.show()
 #Document Length Bin Comparison
 model_names = []
 scores = {'p':[],'r':[],'f':[]}
-#For each ROC Curve saved
-for file in [f for f in os.listdir('Plots/DLB_Analysis') if '.json' in f]:
+#For each DLB Breakdown saved
+for file in sorted([f for f in os.listdir('Plots/DLB_Analysis') if '.json' in f]):
 	model_name = file[:file.index('.json')]
-	model_names.append(model_name)
+	model_names.append(model_name[:model_name.index('_')])
 	DLB = json.load(open('Plots/DLB_Analysis/'+file,'r'))
 	for k in scores:
 		scores[k].append(DLB[k])
@@ -52,10 +52,10 @@ plt.show()
 model_names = []
 scores = {'p':[],'r':[],'f':[]}
 counts = []
-#For each ROC Curve saved
-for file in [f for f in os.listdir('Plots/NP_Analysis') if '.json' in f]:
+#For each Num Predicted Breakdown saved
+for file in sorted([f for f in os.listdir('Plots/NP_Analysis') if '.json' in f]):
 	model_name = file[:file.index('.json')]
-	model_names.append(model_name)
+	model_names.append(model_name[:model_name.index('_')])
 	NP = json.load(open('Plots/NP_Analysis/'+file,'r'))
 	for k in scores:
 		scores[k].append(NP[k])
@@ -80,5 +80,6 @@ plt.subplot(224)
 plt.title("Frequency of # of Sent Pred by Label")
 plt.bar(x,counts)
 
+plt.figlegend(labels=model_names,loc='center',bbox_to_anchor=(0.84,0.22))
 plt.tight_layout()
 plt.show()
